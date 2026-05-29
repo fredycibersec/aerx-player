@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=RadioES
+GenericName=Radio Player
+Comment=Radio española online y reproductor de archivos MP3
+Exec=RADIOES_BIN
+Icon=radioes
+Terminal=false
+Categories=AudioVideo;Audio;Player;Music;
+Keywords=radio;música;mp3;emisoras;españa;spectrum;
+StartupNotify=true
+StartupWMClass=radioes.app

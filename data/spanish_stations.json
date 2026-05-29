@@ -1,0 +1,162 @@
+[
+  {
+    "name": "RNE Radio 1",
+    "url": "https://dispatcher.rndfnk.com/crtve/rne1/mad/mp3/high",
+    "favicon": "https://www.rtve.es/favicon.ico",
+    "genre": "Noticias",
+    "bitrate": 128,
+    "description": "Radio Nacional de España – Informativo"
+  },
+  {
+    "name": "RNE Radio 5",
+    "url": "https://d131.rndfnk.com/star/crtve/rne5/mad/mp3/128/stream.mp3?cid=01GEP4QN2TSXQ",
+    "favicon": "https://www.rtve.es/favicon.ico",
+    "genre": "Noticias",
+    "bitrate": 128,
+    "description": "RNE Radio 5 – Todo Noticias"
+  },
+  {
+    "name": "Cadena SER",
+    "url": "http://playerservices.streamtheworld.com/api/livestream-redirect/CADENASER.mp3",
+    "favicon": "https://cadenaser00.epimg.net/favicon.png",
+    "genre": "Generalista",
+    "bitrate": 128,
+    "description": "Cadena SER – Radio generalista líder"
+  },
+  {
+    "name": "Cadena 100",
+    "url": "http://cadena100-streamers-mp3.flumotion.com/cope/cadena100.mp3",
+    "favicon": "https://www.cadena100.es/estaticos/apple-touch-icon-192x192.png",
+    "genre": "Pop",
+    "bitrate": 128,
+    "description": "Cadena 100 – Los mejores éxitos"
+  },
+  {
+    "name": "Rock FM",
+    "url": "http://flucast31-h-cloud.flumotion.com/cope/rockfm-low.mp3",
+    "favicon": "https://www.rockfm.fm/estaticos/apple-touch-icon-192x192.png",
+    "genre": "Rock",
+    "bitrate": 96,
+    "description": "Rock FM – Rock en español e inglés"
+  },
+  {
+    "name": "MegaStar FM",
+    "url": "http://flucast-bl05.flumotion.com/cope/megastar.mp3",
+    "favicon": "https://www.megastar.fm/estaticos/apple-touch-icon-192x192.png",
+    "genre": "Pop",
+    "bitrate": 128,
+    "description": "MegaStar FM – Pop internacional"
+  },
+  {
+    "name": "esRadio",
+    "url": "http://livestreaming.esradio.fm/stream64.mp3",
+    "favicon": "",
+    "genre": "Noticias",
+    "bitrate": 64,
+    "description": "esRadio – Noticias y opinión"
+  },
+  {
+    "name": "Los 40 Principales",
+    "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/Los40.mp3",
+    "favicon": "https://los40es00.epimg.net/iconos/v1.x/v1.0/touch-apple.png",
+    "genre": "Pop",
+    "bitrate": 128,
+    "description": "Los 40 Principales – Top 40 español"
+  },
+  {
+    "name": "Los 40 Urban",
+    "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/LOS40_URBAN.mp3",
+    "favicon": "https://los40es00.epimg.net/iconos/v1.x/v1.0/promos/promo_og_los40.png",
+    "genre": "Urban",
+    "bitrate": 128,
+    "description": "Los 40 Urban – Urbano y reggaetón"
+  },
+  {
+    "name": "Los 40 Dance",
+    "url": "http://playerservices.streamtheworld.com/api/livestream-redirect/LOS40_DANCE_SC",
+    "favicon": "",
+    "genre": "Dance",
+    "bitrate": 128,
+    "description": "Los 40 Dance – EDM y dance"
+  },
+  {
+    "name": "LOS40 Classic",
+    "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/LOS40_CLASSIC.mp3",
+    "favicon": "https://los40es00.epimg.net/estaticos/recursosgraficos/v1/img/app/los40_192.png",
+    "genre": "Pop Rock",
+    "bitrate": 128,
+    "description": "LOS40 Classic – Pop y rock de los 80s-90s"
+  },
+  {
+    "name": "Cadena Dial",
+    "url": "http://playerservices.streamtheworld.com/api/livestream-redirect/CADENADIAL.mp3",
+    "favicon": "https://www.cadenadial.com/wp-content/uploads/2024/03/cropped-512x512_favicon_dial-180x180.png",
+    "genre": "Pop español",
+    "bitrate": 128,
+    "description": "Cadena Dial – Pop en español y latino"
+  },
+  {
+    "name": "Chocolate FM",
+    "url": "http://streaming5.elitecomunicacion.es:8082/live.mp3",
+    "favicon": "https://www.chocolatefm.com/__ovh/common/img/favicon.ico",
+    "genre": "Latino",
+    "bitrate": 192,
+    "description": "Chocolate FM – Pop latino y reggaetón"
+  },
+  {
+    "name": "Radio Marca Madrid",
+    "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIOMARCA_NACIONAL_SC",
+    "favicon": "",
+    "genre": "Deportes",
+    "bitrate": 128,
+    "description": "Radio Marca – Deportes las 24 horas"
+  },
+  {
+    "name": "Ibiza Global Radio",
+    "url": "http://ibizaglobalradio.streaming-pro.com:8024/",
+    "favicon": "",
+    "genre": "Dance",
+    "bitrate": 128,
+    "description": "Ibiza Global Radio – House y electrónica"
+  },
+  {
+    "name": "Café del Mar Radio",
+    "url": "https://streams.radio.co/se1a320b47/listen",
+    "favicon": "https://cafedelmar.com/apple-touch-icon.png",
+    "genre": "Chillout",
+    "bitrate": 192,
+    "description": "Café del Mar – Chillout, lounge, ibiza"
+  },
+  {
+    "name": "Pure Ibiza Radio",
+    "url": "https://pureibizaradio.clubbingradios.com:9518/PureIbizaRadio",
+    "favicon": "",
+    "genre": "Dance",
+    "bitrate": 256,
+    "description": "Pure Ibiza Radio – Club music"
+  },
+  {
+    "name": "80s Éxitos",
+    "url": "https://80sexitos.stream.laut.fm/80sexitos",
+    "favicon": "",
+    "genre": "Clásicos",
+    "bitrate": 128,
+    "description": "80s Éxitos – Lo mejor de los 80s y 90s"
+  },
+  {
+    "name": "1000 HITS 80s",
+    "url": "http://c2.auracast.net:8048/stream",
+    "favicon": "",
+    "genre": "Clásicos",
+    "bitrate": 128,
+    "description": "1000 Hits 80s – Italo disco y dance"
+  },
+  {
+    "name": "Costa del Mar Chillout",
+    "url": "http://stream.cdm-chillout.com:8020/stream-AAC-Chill",
+    "favicon": "http://www.costadelmar-radio.com/favicon.ico",
+    "genre": "Chillout",
+    "bitrate": 96,
+    "description": "Costa del Mar – Chillout relajante"
+  }
+]
