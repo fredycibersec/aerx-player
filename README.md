@@ -153,4 +153,4 @@ radioes/
 
 ## Licencia
 
-MIT © 2026 [SaruMan](mailto:alfredo.ramirez@nologin.es)
+MIT © 2026 [SaruMan](mailto:sarumanthegrey@proton.me)
