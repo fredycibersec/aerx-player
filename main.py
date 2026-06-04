@@ -26,7 +26,7 @@ import metadata as meta_mod
 
 Gst.init(None)
 
-APP_VERSION = '1.2.0'
+APP_VERSION = '1.2.1'
 
 DATA_DIR      = Path(__file__).parent / 'data'
 STATIONS_FILE = DATA_DIR / 'spanish_stations.json'
@@ -273,25 +273,60 @@ class Mp3Row(Gtk.ListBoxRow):
 
 # ── Spectrum visualizer ────────────────────────────────────────────────────────
 
-class SpectrumVisualizer(Gtk.DrawingArea):
-    """Transparent spectrum analyzer — only the waveform is drawn."""
+class SpectrumVisualizer(Gtk.Overlay):
+    """Multi-mode spectrum analyzer — six visual styles, cycle with the arrow button."""
 
-    BANDS         = 40   # bandas que calcula GStreamer
-    DISPLAY_BANDS = 26   # cuántas mostrar (elimina agudos que no se mueven)
+    BANDS         = 40
+    DISPLAY_BANDS = 26
     THRESHOLD     = -80.0
     DECAY         = 1.2
     HEIGHT        = 160
+
+    _MODES = ('gauss', 'bars', 'scope', 'classic', 'radial', 'mirror')
+    _LABELS = {
+        'gauss':   'Onda suave',
+        'bars':    'Barras agrupadas',
+        'scope':   'Osciloscopio',
+        'classic': 'Barras clásicas',
+        'radial':  'Radial',
+        'mirror':  'Espejo',
+    }
 
     def __init__(self):
         super().__init__()
         self._mags   = [self.THRESHOLD] * self.BANDS
         self._peaks  = [self.THRESHOLD] * self.BANDS
         self._active = False
+        self._mode   = 0
 
+        self._da = Gtk.DrawingArea()
+        self._da.set_size_request(-1, self.HEIGHT)
+        self._da.set_hexpand(True)
+        self._da.set_draw_func(self._draw)
+        self.set_child(self._da)
         self.set_size_request(-1, self.HEIGHT)
         self.set_hexpand(True)
-        self.set_draw_func(self._draw)
+
+        btn = Gtk.Button()
+        btn.set_icon_name('media-playlist-repeat-symbolic')
+        btn.add_css_class('circular')
+        btn.add_css_class('flat')
+        btn.set_halign(Gtk.Align.END)
+        btn.set_valign(Gtk.Align.END)
+        btn.set_margin_end(6)
+        btn.set_margin_bottom(6)
+        btn.set_opacity(0.55)
+        btn.set_tooltip_text('Modo: ' + self._LABELS[self._MODES[0]])
+        btn.connect('clicked', self._on_cycle)
+        self._cycle_btn = btn
+        self.add_overlay(btn)
+
         GLib.timeout_add(50, self._tick)
+
+    def _on_cycle(self, _btn):
+        self._mode = (self._mode + 1) % len(self._MODES)
+        self._cycle_btn.set_tooltip_text('Modo: ' + self._LABELS[self._MODES[self._mode]])
+        self._da.queue_draw()
 
     def push(self, magnitudes: list):
         n = min(len(magnitudes), self.BANDS)
@@ -301,13 +336,13 @@ class SpectrumVisualizer(Gtk.DrawingArea):
             self._mags[i] = v
             if v > self._peaks[i]:
                 self._peaks[i] = v
-        self.queue_draw()
+        self._da.queue_draw()
 
     def reset(self):
         self._mags   = [self.THRESHOLD] * self.BANDS
         self._peaks  = [self.THRESHOLD] * self.BANDS
         self._active = False
-        self.queue_draw()
+        self._da.queue_draw()
 
     def _tick(self):
         changed = False
@@ -316,11 +351,30 @@ class SpectrumVisualizer(Gtk.DrawingArea):
                 self._peaks[i] = max(self._mags[i], self._peaks[i] - self.DECAY)
                 changed = True
         if changed:
-            self.queue_draw()
+            self._da.queue_draw()
         return True
 
     def _norm(self, db: float) -> float:
         return max(0.0, min(1.0, (db - self.THRESHOLD) / -self.THRESHOLD))
+
+    def _amp_color(self, t: float, alpha: float = 1.0):
+        """t=0 (low) → green, t=0.5 → yellow, t=1 (high) → red."""
+        if t < 0.5:
+            s = t / 0.5
+            r, g, b = s * 0.95, 0.88, 0.0
+        else:
+            s = (t - 0.5) / 0.5
+            r, g, b = 0.95, 0.88 - s * 0.83, 0.0
+        return (r, g, b, alpha)
+
+    def _amp_grad(self, alpha, height, _cairo):
+        """Gradiente vertical: y=0 (pico) → rojo, y=height (base) → verde."""
+        pat = _cairo.LinearGradient(0, 0, 0, height)
+        pat.add_color_stop_rgba(0.00, 0.95, 0.05, 0.0,  alpha)
+        pat.add_color_stop_rgba(0.30, 1.00, 0.50, 0.0,  alpha)
+        pat.add_color_stop_rgba(0.58, 0.92, 0.88, 0.0,  alpha)
+        pat.add_color_stop_rgba(1.00, 0.05, 0.88, 0.05, alpha)
+        return pat
 
     def _build_curve(self, pts, cr):
         if len(pts) < 2:
@@ -332,81 +386,361 @@ class SpectrumVisualizer(Gtk.DrawingArea):
             cr.curve_to(pts[i][0], pts[i][1], pts[i][0], pts[i][1], mx, my)
         cr.line_to(*pts[-1])
 
+    def _rounded_bar(self, cr, x, y, w, h, r):
+        import math
+        r = min(r, w / 2, h / 2)
+        if r < 0.5:
+            cr.new_path()
+            cr.rectangle(x, y, w, h)
+            return
+        cr.new_path()
+        cr.move_to(x, y + h)
+        cr.line_to(x, y + r)
+        cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+        cr.arc(x + w - r, y + r, r, 3 * math.pi / 2, 0)
+        cr.line_to(x + w, y + h)
+        cr.close_path()
+
     def _draw(self, _area, cr, width, height):
         import cairo as _cairo
         cr.set_operator(1)
         if not self._active:
             return
+        mode = self._MODES[self._mode]
+        if   mode == 'gauss':   self._draw_gauss(cr, width, height, _cairo)
+        elif mode == 'bars':    self._draw_bars(cr, width, height, _cairo)
+        elif mode == 'scope':   self._draw_scope(cr, width, height, _cairo)
+        elif mode == 'classic': self._draw_classic(cr, width, height, _cairo)
+        elif mode == 'radial':  self._draw_radial(cr, width, height, _cairo)
+        elif mode == 'mirror':  self._draw_mirror(cr, width, height, _cairo)
 
-        # Espejo: [agudos→graves | graves→agudos] — bajos en el centro, forma de campana
-        # Solo se usan DISPLAY_BANDS para eliminar los agudos que apenas se mueven
+    # ── Modo 0: Gauss — campana suave simétrica ─────────────────────────────────
+
+    def _draw_gauss(self, cr, width, height, _cairo):
         D = self.DISPLAY_BANDS
         mirror = list(range(D - 1, -1, -1)) + list(range(1, D))
-        n = len(mirror)  # 2*D - 1 = 51 puntos
-
-        draw_w = width * 0.8
+        n      = len(mirror)
+        draw_w = width * 0.88
         x_off  = (width - draw_w) / 2
+        bw     = draw_w / n
 
-        bw  = draw_w / n
         pts = []
         for i, bi in enumerate(mirror):
             norm = self._norm(self._mags[bi])
-            pts.append((x_off + (i + 0.5) * bw, height - norm * (height - 2)))
+            pts.append((x_off + (i + 0.5) * bw, height - norm * (height - 4)))
 
-        def _grad(alpha):
-            pat = _cairo.LinearGradient(0, 0, 0, height)
-            pat.add_color_stop_rgba(0.00, 1.0, 0.05, 0.0,  alpha)
-            pat.add_color_stop_rgba(0.30, 1.0, 0.55, 0.0,  alpha)
-            pat.add_color_stop_rgba(0.60, 0.8, 1.0,  0.0,  alpha)
-            pat.add_color_stop_rgba(1.00, 0.0, 0.9,  0.15, alpha)
-            return pat
-
-        # Relleno translúcido
+        # Gradiente vertical: azul en base (baja energía) → rojo en pico (alta energía)
         cr.save()
         self._build_curve(pts, cr)
         cr.line_to(pts[-1][0], height)
         cr.line_to(pts[0][0],  height)
         cr.close_path()
-        cr.set_source(_grad(0.22))
+        cr.set_source(self._amp_grad(0.22, height, _cairo))
         cr.fill()
         cr.restore()
 
-        # Halo suave ancho
         cr.save()
         self._build_curve(pts, cr)
-        cr.set_source(_grad(0.14))
+        cr.set_source(self._amp_grad(0.14, height, _cairo))
         cr.set_line_width(14)
         cr.stroke()
         cr.restore()
 
-        # Línea principal nítida
         cr.save()
         self._build_curve(pts, cr)
-        cr.set_source(_grad(0.92))
+        cr.set_source(self._amp_grad(0.92, height, _cairo))
         cr.set_line_width(2.0)
         cr.stroke()
         cr.restore()
 
-        # Brillo blanco encima
         cr.save()
         self._build_curve(pts, cr)
-        cr.set_source_rgba(1.0, 1.0, 1.0, 0.28)
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.25)
         cr.set_line_width(0.8)
         cr.stroke()
         cr.restore()
 
-        # Marcadores de pico (simétricos por el espejo)
         for i, bi in enumerate(mirror):
             norm = self._norm(self._peaks[bi])
             if norm < 0.03:
                 continue
+            rv, gv, bv, _ = self._amp_color(norm)
             x = x_off + (i + 0.5) * bw
-            y = height - norm * (height - 2)
-            t = norm
-            pr, pg = (t * 2.0, 1.0) if t < 0.5 else (1.0, 1.0 - (t - 0.5) * 2.0)
-            cr.set_source_rgba(pr, pg, 0.0, 0.88)
+            y = height - norm * (height - 4)
+            cr.set_source_rgba(rv, gv, bv, 0.90)
             cr.rectangle(x - bw * 0.28, y - 1.5, bw * 0.56, 2.5)
             cr.fill()
+
+    # ── Modo 1: Bars — barras anchas agrupadas ──────────────────────────────────
+
+    def _draw_bars(self, cr, width, height, _cairo):
+        D = self.DISPLAY_BANDS
+        N = 10
+        groups = []
+        for g in range(N):
+            lo = int(g * D / N)
+            hi = max(int((g + 1) * D / N), lo + 1)
+            avg  = sum(self._mags[lo:hi]) / (hi - lo)
+            peak = max(self._peaks[lo:hi])
+            groups.append((avg, peak))
+
+        gap   = 5
+        bar_w = (width - gap * (N + 1)) / N
+
+        # Gradiente global vertical: se aplica a todas las barras (baja energía=azul, alta=rojo)
+        ag = self._amp_grad(0.92, height, _cairo)
+
+        for g, (avg_db, peak_db) in enumerate(groups):
+            norm   = self._norm(avg_db)
+            norm_p = self._norm(peak_db)
+
+            x     = gap + g * (bar_w + gap)
+            bar_h = norm * (height - 8)
+            y     = height - bar_h
+
+            if bar_h < 2:
+                continue
+
+            cr.save()
+            self._rounded_bar(cr, x, y, bar_w, bar_h, 5)
+            cr.set_source(ag)
+            cr.fill()
+            cr.restore()
+
+            if norm_p > 0.04:
+                py   = height - norm_p * (height - 8)
+                rv, gv, bv, _ = self._amp_color(norm_p)
+                cr.set_source_rgba(rv, gv, bv, 0.95)
+                cr.rectangle(x, py - 2.5, bar_w, 3.5)
+                cr.fill()
+
+    # ── Modo 2: Scope — osciloscopio ────────────────────────────────────────────
+
+    def _draw_scope(self, cr, width, height, _cairo):
+        D  = self.DISPLAY_BANDS
+        cy = height / 2
+
+        import math as _math
+        pts = [(0.0, cy)]
+        for i in range(D):
+            norm = self._norm(self._mags[i])
+            x    = width * (i + 1) / (D + 1)
+            # Onda suave con periodo de ~8 bandas — simula analizador de voz
+            sign = _math.sin(_math.pi * i / 4.0)
+            pts.append((x, cy + sign * norm * (height * 0.44)))
+        pts.append((float(width), cy))
+
+        # Línea de referencia central
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.07)
+        cr.set_line_width(0.6)
+        cr.move_to(0, cy)
+        cr.line_to(width, cy)
+        cr.stroke()
+
+        # Gradiente vertical simétrico: verde en centro (reposo) → rojo en extremos (alta energía)
+        line_grad = _cairo.LinearGradient(0, 0, 0, height)
+        line_grad.add_color_stop_rgba(0.00, 0.95, 0.05, 0.0,  0.9)
+        line_grad.add_color_stop_rgba(0.28, 1.00, 0.50, 0.0,  0.9)
+        line_grad.add_color_stop_rgba(0.50, 0.05, 0.90, 0.05, 0.9)
+        line_grad.add_color_stop_rgba(0.72, 1.00, 0.50, 0.0,  0.9)
+        line_grad.add_color_stop_rgba(1.00, 0.95, 0.05, 0.0,  0.9)
+
+        # Halo exterior
+        cr.save()
+        self._build_curve(pts, cr)
+        glow = _cairo.LinearGradient(0, 0, 0, height)
+        glow.add_color_stop_rgba(0.00, 0.95, 0.05, 0.0, 0.10)
+        glow.add_color_stop_rgba(0.50, 0.05, 0.88, 0.05, 0.10)
+        glow.add_color_stop_rgba(1.00, 0.95, 0.05, 0.0, 0.10)
+        cr.set_source(glow)
+        cr.set_line_width(12)
+        cr.stroke()
+        cr.restore()
+
+        cr.save()
+        self._build_curve(pts, cr)
+        cr.set_source(line_grad)
+        cr.set_line_width(2.0)
+        cr.stroke()
+        cr.restore()
+
+        cr.save()
+        self._build_curve(pts, cr)
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.38)
+        cr.set_line_width(0.6)
+        cr.stroke()
+        cr.restore()
+
+    # ── Modo 3: Classic — barras finas individuales ─────────────────────────────
+
+    def _draw_classic(self, cr, width, height, _cairo):
+        D     = self.DISPLAY_BANDS
+        gap   = 2
+        bar_w = (width - gap * (D + 1)) / D
+
+        # Gradiente global vertical aplicado a todas las barras
+        ag = self._amp_grad(0.92, height, _cairo)
+
+        for i in range(D):
+            norm   = self._norm(self._mags[i])
+            norm_p = self._norm(self._peaks[i])
+
+            x     = gap + i * (bar_w + gap)
+            bar_h = norm * (height - 4)
+            y     = height - bar_h
+
+            if bar_h < 1.5:
+                continue
+
+            cr.set_source(ag)
+            cr.rectangle(x, y, bar_w, bar_h)
+            cr.fill()
+
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.22)
+            cr.rectangle(x, y, bar_w, min(2.5, bar_h))
+            cr.fill()
+
+            if norm_p > 0.03:
+                py = height - norm_p * (height - 4) - 2
+                rv, gv, bv, _ = self._amp_color(norm_p)
+                cr.set_source_rgba(rv, gv, bv, 0.95)
+                cr.rectangle(x, py, bar_w, 2.5)
+                cr.fill()
+
+    # ── Modo 4: Radial — circular ────────────────────────────────────────────────
+
+    def _draw_radial(self, cr, width, height, _cairo):
+        import math
+        D     = self.DISPLAY_BANDS
+        cx    = width  / 2
+        cy    = height / 2
+        # Usar el espacio disponible completo (limitado por el lado más corto)
+        r_max = min(width / 2, height / 2) * 0.92
+        r_min = r_max * 0.18
+
+        step  = 2 * math.pi / D
+        outer = []
+        for i in range(D):
+            norm = self._norm(self._mags[i])
+            # Curva de potencia: señales típicas (0.3-0.6) se ven grandes visualmente
+            norm_v = norm ** 0.55
+            r     = r_min + norm_v * (r_max - r_min)
+            angle = -math.pi / 2 + i * step
+            outer.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
+
+        # Polígono relleno con gradiente radial verde→rojo
+        fill_grad = _cairo.RadialGradient(cx, cy, r_min * 0.5, cx, cy, r_max)
+        fill_grad.add_color_stop_rgba(0.0,  0.05, 0.88, 0.05, 0.40)
+        fill_grad.add_color_stop_rgba(0.50, 0.92, 0.88, 0.0,  0.25)
+        fill_grad.add_color_stop_rgba(1.0,  0.95, 0.05, 0.0,  0.15)
+
+        cr.save()
+        cr.move_to(*outer[0])
+        for pt in outer[1:]:
+            cr.line_to(*pt)
+        cr.close_path()
+        cr.set_source(fill_grad)
+        cr.fill()
+        cr.restore()
+
+        # Rayos coloreados por amplitud
+        for i in range(D):
+            norm  = self._norm(self._mags[i])
+            norm_v = norm ** 0.55
+            r     = r_min + norm_v * (r_max - r_min)
+            angle = -math.pi / 2 + i * step
+            rv, gv, bv, _ = self._amp_color(norm_v)
+            x_out = cx + r      * math.cos(angle)
+            y_out = cy + r      * math.sin(angle)
+            x_in  = cx + r_min  * math.cos(angle)
+            y_in  = cy + r_min  * math.sin(angle)
+
+            cr.set_source_rgba(rv, gv, bv, 0.80)
+            cr.set_line_width(1.6)
+            cr.move_to(x_in, y_in)
+            cr.line_to(x_out, y_out)
+            cr.stroke()
+
+            if norm_v > 0.15:
+                cr.set_source_rgba(rv, gv, bv, 0.95)
+                cr.arc(x_out, y_out, 2.5, 0, 2 * math.pi)
+                cr.fill()
+
+        # Contorno del polígono
+        cr.save()
+        cr.move_to(*outer[0])
+        for pt in outer[1:]:
+            cr.line_to(*pt)
+        cr.close_path()
+        out_grad = _cairo.RadialGradient(cx, cy, r_min, cx, cy, r_max)
+        out_grad.add_color_stop_rgba(0.0,  0.05, 0.88, 0.05, 0.85)
+        out_grad.add_color_stop_rgba(0.55, 0.95, 0.88, 0.0,  0.85)
+        out_grad.add_color_stop_rgba(1.0,  0.95, 0.05, 0.0,  0.85)
+        cr.set_source(out_grad)
+        cr.set_line_width(1.5)
+        cr.stroke()
+        cr.restore()
+
+        # Círculo central
+        cr.set_source_rgba(0.05, 0.88, 0.05, 0.22)
+        cr.arc(cx, cy, r_min, 0, 2 * math.pi)
+        cr.fill()
+        cr.set_source_rgba(0.05, 0.88, 0.05, 0.60)
+        cr.arc(cx, cy, r_min, 0, 2 * math.pi)
+        cr.set_line_width(1.0)
+        cr.stroke()
+
+    # ── Modo 5: Mirror — espejo vertical ────────────────────────────────────────
+
+    def _draw_mirror(self, cr, width, height, _cairo):
+        D     = self.DISPLAY_BANDS
+        gap   = 2
+        bar_w = (width - gap * (D + 1)) / D
+        cy    = height / 2
+
+        for i in range(D):
+            norm = self._norm(self._mags[i])
+
+            x      = gap + i * (bar_w + gap)
+            half_h = norm * (cy - 2)
+
+            if half_h < 1.0:
+                continue
+
+            # Gradiente: verde en centro (reposo) → amarillo → rojo en punta (alta energía)
+            rv, gv, bv, _ = self._amp_color(norm)
+
+            # Barra superior (centro → arriba)
+            pat_up = _cairo.LinearGradient(0, cy, 0, cy - half_h)
+            pat_up.add_color_stop_rgba(0.0, 0.05, 0.88, 0.05, 0.55)
+            pat_up.add_color_stop_rgba(0.5, 0.92, 0.88, 0.0,  0.78)
+            pat_up.add_color_stop_rgba(1.0, rv,   gv,   bv,   0.95)
+            cr.set_source(pat_up)
+            cr.rectangle(x, cy - half_h, bar_w, half_h)
+            cr.fill()
+
+            # Barra inferior (centro → abajo): espejo idéntico
+            pat_dn = _cairo.LinearGradient(0, cy, 0, cy + half_h)
+            pat_dn.add_color_stop_rgba(0.0, 0.05, 0.88, 0.05, 0.55)
+            pat_dn.add_color_stop_rgba(0.5, 0.92, 0.88, 0.0,  0.78)
+            pat_dn.add_color_stop_rgba(1.0, rv,   gv,   bv,   0.90)
+            cr.set_source(pat_dn)
+            cr.rectangle(x, cy, bar_w, half_h)
+            cr.fill()
+
+            # Brillo en los extremos
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.22)
+            cr.rectangle(x, cy - half_h, bar_w, min(2.0, half_h))
+            cr.fill()
+            cr.rectangle(x, cy + half_h - min(2.0, half_h), bar_w, min(2.0, half_h))
+            cr.fill()
+
+        # Línea divisoria central
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.10)
+        cr.set_line_width(1.0)
+        cr.move_to(0, cy)
+        cr.line_to(width, cy)
+        cr.stroke()
 
 
 # ── Main Window ────────────────────────────────────────────────────────────────
