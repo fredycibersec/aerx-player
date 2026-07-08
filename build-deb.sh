@@ -7,7 +7,7 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 
 PKG_NAME="radioes"
-PKG_VERSION="1.2.1"
+PKG_VERSION="1.2.2"
 PKG_ARCH="all"
 PKG_FILE="${PKG_NAME}_${PKG_VERSION}_${PKG_ARCH}.deb"
 
@@ -33,7 +33,7 @@ install -d \
     "$STAGE/usr/share/doc/$PKG_NAME"
 
 # Fuentes Python
-for f in main.py player.py radio_browser.py metadata.py; do
+for f in main.py player.py radio_browser.py metadata.py cover_lookup.py update_check.py; do
     install -m644 "$APP_DIR/$f" "$STAGE/$INSTALL_DIR/$f"
 done
 
