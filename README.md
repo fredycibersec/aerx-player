@@ -2,11 +2,19 @@
 
 > Reproductor de radio española online y archivos de audio locales, con interfaz GTK4/Adwaita.
 
-![RadioES screenshot placeholder](data/icons/radioes-256.png)
 <p align=center>
-    <img width="900" alt="Radio" src="https://github.com/user-attachments/assets/0bb83f7c-810d-4082-9594-d6cb41fa485f" />
-    <img width="900" alt="MP3" src="https://github.com/user-attachments/assets/9c1977ab-39b0-433d-a49b-2fc1e600d399" />
-    <img width="900" alt="about" src="https://github.com/user-attachments/assets/a315648c-7997-43f1-aa93-7a29e35e8262" />
+    <img width="900" alt="Radio" src="data/screenshots/01-radio.png" />
+    <img width="900" alt="MP3 con edición de etiquetas" src="data/screenshots/02-mp3.png" />
+</p>
+<p align=center>
+    <img width="440" alt="Editar etiquetas" src="data/screenshots/03-editar-etiquetas.png" />
+    <img width="440" alt="Preferencias" src="data/screenshots/06-preferencias.png" />
+</p>
+<p align=center>
+    <img width="900" alt="Fondo de carátula a pantalla completa" src="data/screenshots/04-fondo-caratula.png" />
+</p>
+<p align=center>
+    <img width="900" alt="Visualizador: Vúmetro y Partículas" src="data/screenshots/05-visualizadores.png" />
 </p>
 
 RadioES es una aplicación de escritorio para **distribuciones basadas en Debian/Ubuntu** (Ubuntu 22.04+, Linux Mint 21+, Debian 12+) que permite escuchar emisoras de radio españolas en directo y reproducir archivos de audio locales, todo con una interfaz moderna integrada en el escritorio GNOME/Adwaita.
