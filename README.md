@@ -18,6 +18,10 @@ RadioES es una aplicación de escritorio para **distribuciones basadas en Debian
 - **+20 emisoras preconfiguradas** — RNE 1/2/3/4/5, Cadena SER, Cadena 100, Rock FM, Los 40, Europa FM, Cadena Dial, COPE, Onda Cero, Cadena Dial, Megastar FM, Kiss FM, Radio 3, Café del Mar y más.
 - **Descubrimiento de emisoras** vía [Radio Browser API](https://www.radio-browser.info/) (búsqueda en tiempo real).
 - **Reproductor de archivos de audio** — MP3, FLAC, OGG, M4A, AAC, WAV, OPUS.
+- **Edición de etiquetas ID3/FLAC/MP4** — título, artista, álbum, nº de pista y carátula, con guardado directo en el fichero.
+- **Búsqueda automática de carátula e info** vía MusicBrainz + Cover Art Archive, con iTunes Search API como respaldo.
+- **Fondo de carátula a pantalla completa** con difuminado y oscurecido al ocultar el panel lateral, si la carátula tiene buena resolución.
+- **Comprobación de actualizaciones** desde "Acerca de", con enlace directo de descarga del `.deb` cuando hay una versión más reciente en GitHub.
 - **Visualizador de espectro** en forma de campana de Gauss con gradiente de color.
 - **Secciones colapsables por género** con sección de Favoritas.
 - **Añadir emisoras manualmente** por URL; exportar/importar favoritos en JSON.
@@ -130,6 +134,8 @@ radioes/
 
 | Versión | Cambios destacados |
 |---------|-------------------|
+| 1.2.2   | Edición de etiquetas ID3/FLAC/MP4 con guardado en disco, búsqueda automática de carátula/info (MusicBrainz + Cover Art Archive, respaldo iTunes), fondo de carátula a pantalla completa con blur al ocultar el panel lateral |
+| 1.2.1   | Visualizador multi-modo (6 estilos: Gauss, barras agrupadas, osciloscopio, barras clásicas, radial, espejo) |
 | 1.2.0   | Visualizador de espectro en campana, modo shuffle/repeat/secuencial, sleep timer, notificaciones, mute por teclado, ordenación MP3 |
 | 1.1.0   | Soporte `Adw.OverlaySplitView`, icono 512px, escaneo recursivo de carpetas |
 | 1.0.0   | Versión inicial: radio + MP3 + Radio Browser + favoritos |

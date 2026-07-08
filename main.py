@@ -22,11 +22,13 @@ from gi.repository import (
 
 from player import Player
 import radio_browser
+import cover_lookup
+import update_check
 import metadata as meta_mod
 
 Gst.init(None)
 
-APP_VERSION = '1.2.1'
+APP_VERSION = '1.2.2'
 
 DATA_DIR      = Path(__file__).parent / 'data'
 STATIONS_FILE = DATA_DIR / 'spanish_stations.json'
@@ -65,6 +67,50 @@ def _placeholder_pixbuf(icon_name: str, size: int = 64) -> GdkPixbuf.Pixbuf | No
     info  = theme.lookup_icon(icon_name, None, size, 1,
                               Gtk.TextDirection.NONE, 0)
     return info.load_icon() if info else None
+
+
+# ── Fullscreen cover background (blur + oscurecido) ────────────────────────────
+
+_FULLSCREEN_MIN_SIDE = 500   # lado menor mínimo (px) para activar el fondo a pantalla completa
+_COVER_BLUR_FACTOR    = 5    # downscale por pasada (pirámide iterativa, no un solo salto agresivo)
+_COVER_BLUR_PASSES    = 5    # nº de pasadas de downscale+upscale acumulativas
+
+_COVER_BG_CSS = b"""
+.cover-dim-layer {
+    background-color: rgba(0, 0, 0, 0.55);
+}
+.now-playing-translucent {
+    background-color: transparent;
+}
+"""
+
+
+def _blur_pixbuf(pb: GdkPixbuf.Pixbuf, factor: int = _COVER_BLUR_FACTOR,
+                  passes: int = _COVER_BLUR_PASSES) -> GdkPixbuf.Pixbuf:
+    """Cheap blur via a small iterative downscale/upscale pyramid. No new deps.
+
+    Each pass shrinks by a mild factor and rescales back to native size —
+    repeated mild passes approximate a real gaussian blur (smooth, rich
+    color) far better than one aggressive downscale+upscale jump, which
+    looks flat/"low-res"/patchy instead of properly blurred.
+    """
+    w, h = pb.get_width(), pb.get_height()
+    cur = pb
+    for _ in range(passes):
+        cw, ch = cur.get_width(), cur.get_height()
+        small = cur.scale_simple(max(1, cw // factor), max(1, ch // factor), GdkPixbuf.InterpType.BILINEAR)
+        cur = small.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
+    return cur
+
+
+def _cover_native_pixbuf(cover_data: bytes) -> GdkPixbuf.Pixbuf | None:
+    """Decode cover_data once, at native resolution."""
+    try:
+        gbytes = GLib.Bytes.new(cover_data)
+        stream = Gio.MemoryInputStream.new_from_bytes(gbytes)
+        return GdkPixbuf.Pixbuf.new_from_stream(stream, None)
+    except Exception:
+        return None
 
 
 def _load_stations_file() -> list:
@@ -228,7 +274,7 @@ class GenreHeaderRow(Gtk.ListBoxRow):
 # ── MP3 file row ───────────────────────────────────────────────────────────────
 
 class Mp3Row(Gtk.ListBoxRow):
-    def __init__(self, path: str, tags: dict):
+    def __init__(self, path: str, tags: dict, on_edit=None):
         super().__init__()
         self.path = path
         self.tags = tags
@@ -241,6 +287,42 @@ class Mp3Row(Gtk.ListBoxRow):
         self._art = Gtk.Image()
         self._art.set_pixel_size(40)
         self._art.set_size_request(40, 40)
+        box.append(self._art)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        vbox.set_hexpand(True)
+        vbox.set_overflow(Gtk.Overflow.HIDDEN)
+        box.append(vbox)
+
+        self._title_lbl = Gtk.Label()
+        self._title_lbl.set_xalign(0)
+        self._title_lbl.add_css_class('body')
+        self._title_lbl.set_ellipsize(Pango.EllipsizeMode.END)
+        self._title_lbl.set_max_width_chars(28)
+        vbox.append(self._title_lbl)
+
+        self._artist_lbl = Gtk.Label()
+        self._artist_lbl.set_xalign(0)
+        self._artist_lbl.add_css_class('caption')
+        self._artist_lbl.add_css_class('dim-label')
+        self._artist_lbl.set_ellipsize(Pango.EllipsizeMode.END)
+        vbox.append(self._artist_lbl)
+
+        self._edit_btn = Gtk.Button()
+        self._edit_btn.set_icon_name('document-edit-symbolic')
+        self._edit_btn.set_tooltip_text('Editar etiquetas')
+        self._edit_btn.add_css_class('flat')
+        self._edit_btn.add_css_class('circular')
+        self._edit_btn.set_valign(Gtk.Align.CENTER)
+        if on_edit:
+            self._edit_btn.connect('clicked', lambda btn: on_edit(self))
+        box.append(self._edit_btn)
+
+        self.refresh(tags)
+
+    def refresh(self, tags: dict):
+        """Repaint art/labels after tags dict has changed (e.g. after editing)."""
+        self.tags = tags
         if tags.get('cover_data'):
             pb = _pixbuf_from_bytes(tags['cover_data'], 40)
             if pb:
@@ -249,26 +331,9 @@ class Mp3Row(Gtk.ListBoxRow):
                 self._art.set_from_icon_name('audio-x-generic')
         else:
             self._art.set_from_icon_name('audio-x-generic')
-        box.append(self._art)
 
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        vbox.set_hexpand(True)
-        vbox.set_overflow(Gtk.Overflow.HIDDEN)
-        box.append(vbox)
-
-        title_lbl = Gtk.Label(label=tags.get('title') or Path(path).stem)
-        title_lbl.set_xalign(0)
-        title_lbl.add_css_class('body')
-        title_lbl.set_ellipsize(Pango.EllipsizeMode.END)
-        title_lbl.set_max_width_chars(28)
-        vbox.append(title_lbl)
-
-        artist_lbl = Gtk.Label(label=tags.get('artist', ''))
-        artist_lbl.set_xalign(0)
-        artist_lbl.add_css_class('caption')
-        artist_lbl.add_css_class('dim-label')
-        artist_lbl.set_ellipsize(Pango.EllipsizeMode.END)
-        vbox.append(artist_lbl)
+        self._title_lbl.set_text(tags.get('title') or Path(self.path).stem)
+        self._artist_lbl.set_text(tags.get('artist', ''))
 
 
 # ── Spectrum visualizer ────────────────────────────────────────────────────────
@@ -282,14 +347,16 @@ class SpectrumVisualizer(Gtk.Overlay):
     DECAY         = 1.2
     HEIGHT        = 160
 
-    _MODES = ('gauss', 'bars', 'scope', 'classic', 'radial', 'mirror')
+    _MODES = ('gauss', 'bars', 'scope', 'classic', 'radial', 'mirror', 'vu', 'particles')
     _LABELS = {
-        'gauss':   'Onda suave',
-        'bars':    'Barras agrupadas',
-        'scope':   'Osciloscopio',
-        'classic': 'Barras clásicas',
-        'radial':  'Radial',
-        'mirror':  'Espejo',
+        'gauss':     'Onda suave',
+        'bars':      'Barras agrupadas',
+        'scope':     'Osciloscopio',
+        'classic':   'Barras clásicas',
+        'radial':    'Radial',
+        'mirror':    'Espejo',
+        'vu':        'Vúmetro',
+        'particles': 'Partículas',
     }
 
     def __init__(self):
@@ -298,6 +365,12 @@ class SpectrumVisualizer(Gtk.Overlay):
         self._peaks  = [self.THRESHOLD] * self.BANDS
         self._active = False
         self._mode   = 0
+
+        # Estado del modo "particles" (ondas concéntricas + partículas orbitales)
+        self._waves          = []   # lista de dicts {'progress': 0..1, 'strength': 0..1}
+        self._prev_bass      = 0.0
+        self._wave_cooldown  = 0
+        self._particle_phase = 0.0
 
         self._da = Gtk.DrawingArea()
         self._da.set_size_request(-1, self.HEIGHT)
@@ -312,9 +385,9 @@ class SpectrumVisualizer(Gtk.Overlay):
         btn.add_css_class('circular')
         btn.add_css_class('flat')
         btn.set_halign(Gtk.Align.END)
-        btn.set_valign(Gtk.Align.END)
+        btn.set_valign(Gtk.Align.START)
         btn.set_margin_end(6)
-        btn.set_margin_bottom(6)
+        btn.set_margin_top(6)
         btn.set_opacity(0.55)
         btn.set_tooltip_text('Modo: ' + self._LABELS[self._MODES[0]])
         btn.connect('clicked', self._on_cycle)
@@ -336,12 +409,25 @@ class SpectrumVisualizer(Gtk.Overlay):
             self._mags[i] = v
             if v > self._peaks[i]:
                 self._peaks[i] = v
+
+        if self._MODES[self._mode] == 'particles':
+            # Detección simple de golpe de graves: subida brusca en las bandas más bajas
+            bass = sum(self._norm(self._mags[i]) for i in range(4)) / 4
+            if (bass - self._prev_bass > 0.15 and bass > 0.35
+                    and self._wave_cooldown <= 0):
+                self._waves.append({'progress': 0.0, 'strength': bass})
+                self._wave_cooldown = 6  # ~300ms a 50ms/tick, evita ráfagas de ondas
+            self._prev_bass = bass
+
         self._da.queue_draw()
 
     def reset(self):
         self._mags   = [self.THRESHOLD] * self.BANDS
         self._peaks  = [self.THRESHOLD] * self.BANDS
         self._active = False
+        self._waves  = []
+        self._prev_bass     = 0.0
+        self._wave_cooldown = 0
         self._da.queue_draw()
 
     def _tick(self):
@@ -350,6 +436,22 @@ class SpectrumVisualizer(Gtk.Overlay):
             if self._peaks[i] > self._mags[i]:
                 self._peaks[i] = max(self._mags[i], self._peaks[i] - self.DECAY)
                 changed = True
+
+        if self._MODES[self._mode] == 'particles':
+            self._particle_phase = (self._particle_phase + 0.012) % 6.283185307179586
+            if self._wave_cooldown > 0:
+                self._wave_cooldown -= 1
+            if self._waves:
+                still_alive = []
+                for wave in self._waves:
+                    wave['progress'] += 0.035
+                    if wave['progress'] < 1.0:
+                        still_alive.append(wave)
+                self._waves = still_alive
+                changed = True
+            elif self._active:
+                changed = True  # partículas orbitales siguen moviéndose aunque no haya ondas
+
         if changed:
             self._da.queue_draw()
         return True
@@ -413,6 +515,8 @@ class SpectrumVisualizer(Gtk.Overlay):
         elif mode == 'classic': self._draw_classic(cr, width, height, _cairo)
         elif mode == 'radial':  self._draw_radial(cr, width, height, _cairo)
         elif mode == 'mirror':  self._draw_mirror(cr, width, height, _cairo)
+        elif mode == 'vu':        self._draw_vu(cr, width, height, _cairo)
+        elif mode == 'particles': self._draw_particles(cr, width, height, _cairo)
 
     # ── Modo 0: Gauss — campana suave simétrica ─────────────────────────────────
 
@@ -742,6 +846,102 @@ class SpectrumVisualizer(Gtk.Overlay):
         cr.line_to(width, cy)
         cr.stroke()
 
+    # ── Modo 6: VU — vúmetro de doble canal (graves/agudos) con escala LED ─────
+
+    def _draw_vu(self, cr, width, height, _cairo):
+        D    = self.DISPLAY_BANDS
+        half = D // 2
+        low_norm  = sum(self._norm(self._mags[i])  for i in range(half))     / half
+        high_norm = sum(self._norm(self._mags[i])  for i in range(half, D))  / (D - half)
+        low_peak  = sum(self._norm(self._peaks[i]) for i in range(half))     / half
+        high_peak = sum(self._norm(self._peaks[i]) for i in range(half, D))  / (D - half)
+
+        SEGMENTS  = 22
+        GAP_FRAC  = 0.24
+        # Reservar espacio arriba-derecha para el botón de cambio de modo
+        reserved_right = min(40, width * 0.15)
+        usable_w  = max(width - reserved_right, width * 0.6)
+        bar_gap   = usable_w * 0.10
+        bar_w     = (usable_w - bar_gap * 3) / 2
+        margin_v  = 6
+        seg_h     = (height - margin_v * 2) / SEGMENTS
+        led_r     = min(1.5, bar_w * 0.12)
+
+        def draw_channel(x, norm, peak):
+            lit = int(norm * SEGMENTS + 0.5)
+            for s in range(SEGMENTS):
+                t  = s / (SEGMENTS - 1)
+                y  = height - margin_v - (s + 1) * seg_h
+                on = s < lit
+                rv, gv, bv, _ = self._amp_color(t)
+                cr.set_source_rgba(rv, gv, bv, 0.95 if on else 0.14)
+                self._rounded_bar(cr, x, y + seg_h * GAP_FRAC / 2,
+                                   bar_w, seg_h * (1 - GAP_FRAC), led_r)
+                cr.fill()
+
+            peak_seg = int(peak * SEGMENTS)
+            if peak_seg > 0:
+                py = height - margin_v - peak_seg * seg_h
+                cr.set_source_rgba(1.0, 1.0, 1.0, 0.85)
+                cr.rectangle(x, py - 2, bar_w, 2)
+                cr.fill()
+
+        draw_channel(bar_gap, low_norm, low_peak)
+        draw_channel(bar_gap * 2 + bar_w, high_norm, high_peak)
+
+    # ── Modo 7: Partículas — ondas concéntricas + partículas orbitales ─────────
+
+    def _draw_particles(self, cr, width, height, _cairo):
+        import math
+        cx, cy = width / 2, height / 2
+        r_max  = min(width, height) * 0.46
+        D      = self.DISPLAY_BANDS
+
+        overall = sum(self._norm(m) for m in self._mags[:D]) / D
+
+        # Halo de fondo pulsante según energía general
+        glow = _cairo.RadialGradient(cx, cy, 0, cx, cy, r_max * 0.9)
+        glow.add_color_stop_rgba(0.0, 0.15, 0.55, 0.95, 0.20 * overall)
+        glow.add_color_stop_rgba(1.0, 0.15, 0.55, 0.95, 0.0)
+        cr.set_source(glow)
+        cr.arc(cx, cy, r_max * 0.9, 0, 2 * math.pi)
+        cr.fill()
+
+        # Ondas concéntricas nacidas en golpes de graves — mezcladas con blanco
+        # para que se distingan del racimo de partículas en vez de fundirse con él
+        for wave in self._waves:
+            progress = wave['progress']
+            r     = progress * r_max
+            alpha = (1.0 - progress) ** 0.6
+            rv, gv, bv, _ = self._amp_color(min(1.0, wave['strength']))
+            rv, gv, bv = (rv + 1.0) / 2, (gv + 1.0) / 2, (bv + 1.0) / 2
+            cr.set_source_rgba(rv, gv, bv, alpha)
+            cr.set_line_width(3.0 * (1.0 - progress) + 1.0)
+            cr.arc(cx, cy, max(1.0, r), 0, 2 * math.pi)
+            cr.stroke()
+
+        # Partículas orbitales — una por banda, tamaño/brillo según su amplitud
+        for i in range(D):
+            norm  = self._norm(self._mags[i])
+            angle = self._particle_phase + i * (2 * math.pi / D)
+            r     = r_max * 0.25 + norm * r_max * 0.65
+            x     = cx + r * math.cos(angle)
+            y     = cy + r * math.sin(angle)
+            rv, gv, bv, _ = self._amp_color(norm)
+            size = 1.5 + norm * 4.5
+            cr.set_source_rgba(rv, gv, bv, 0.55 + norm * 0.4)
+            cr.arc(x, y, size, 0, 2 * math.pi)
+            cr.fill()
+
+        # Núcleo central pulsante
+        core_r = r_max * 0.12 * (0.8 + overall * 0.6)
+        core_grad = _cairo.RadialGradient(cx, cy, 0, cx, cy, max(1.0, core_r))
+        core_grad.add_color_stop_rgba(0.0, 1.0, 1.0, 1.0, 0.9)
+        core_grad.add_color_stop_rgba(1.0, 0.2, 0.8, 0.6, 0.0)
+        cr.set_source(core_grad)
+        cr.arc(cx, cy, max(1.0, core_r), 0, 2 * math.pi)
+        cr.fill()
+
 
 # ── Main Window ────────────────────────────────────────────────────────────────
 
@@ -770,12 +970,15 @@ class RadioWindow(Adw.ApplicationWindow):
         self._cache_save_timer    = None
         self._split_view          = None
         self._sidebar_btn         = None
-        self._play_mode           = 'sequential'  # 'sequential' | 'repeat' | 'shuffle'
         self._mode_btn            = None
         self._genre_headers: dict[str, GenreHeaderRow] = {}
         self._collapsed_genres: set[str] = set()
         self._sleep_timer_id      = None
         self._sleep_remaining     = 0
+        self._current_cover_data  = None
+        self._cover_fullscreen_active = False
+
+        self._install_cover_bg_css()
         self._sleep_btn           = None
         self._mp3_sort_mode       = 'filename'
         self._mp3_sort_btn        = None
@@ -788,13 +991,54 @@ class RadioWindow(Adw.ApplicationWindow):
         self._music_folder = self._config.get(
             'music_folder', str(Path.home() / 'musica')
         )
+        self._check_updates_on_startup = self._config.get('check_updates_on_startup', True)
+        self._desktop_notifications    = self._config.get('desktop_notifications', True)
+        self._saved_volume  = self._config.get('volume', 0.8)
+        self._play_mode     = self._config.get('play_mode', 'sequential')
+        self._volume_save_timer = None
+        self._player.set_volume(self._saved_volume)
 
         self._build_ui()
         self.connect('close-request', self._on_close_request)
         GLib.idle_add(self._load_builtin_stations)
         GLib.idle_add(self._load_persistent_mp3s)
+        if self._check_updates_on_startup:
+            GLib.timeout_add(1500, self._check_updates_silently)
 
     # ── UI construction ────────────────────────────────────────────────────────
+
+    def _install_cover_bg_css(self):
+        provider = Gtk.CssProvider()
+        provider.load_from_data(_COVER_BG_CSS)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
+    def _update_cover_display_mode(self):
+        """Decide fullscreen-blur-background vs small-thumbnail mode for the cover."""
+        cover_data = self._current_cover_data
+        show_sidebar = self._split_view.get_show_sidebar() if self._split_view else True
+
+        use_fullscreen = False
+        native_pb = None
+        if cover_data and not show_sidebar:
+            native_pb = _cover_native_pixbuf(cover_data)
+            if native_pb and min(native_pb.get_width(), native_pb.get_height()) >= _FULLSCREEN_MIN_SIDE:
+                use_fullscreen = True
+
+        if use_fullscreen == self._cover_fullscreen_active:
+            return
+        self._cover_fullscreen_active = use_fullscreen
+
+        if use_fullscreen and native_pb is not None:
+            blurred = _blur_pixbuf(native_pb)
+            self._cover_bg_picture.set_pixbuf(blurred)
+            self._cover_bg_picture.set_visible(True)
+            self._cover_dim_layer.set_visible(True)
+        else:
+            self._cover_bg_picture.set_visible(False)
+            self._cover_dim_layer.set_visible(False)
 
     def _build_ui(self):
         root = Adw.ToolbarView()
@@ -824,17 +1068,39 @@ class RadioWindow(Adw.ApplicationWindow):
         about_btn.connect('clicked', self._on_about)
         header.pack_end(about_btn)
 
+        prefs_btn = Gtk.Button()
+        prefs_btn.set_icon_name('preferences-system-symbolic')
+        prefs_btn.set_tooltip_text('Preferencias')
+        prefs_btn.add_css_class('flat')
+        prefs_btn.connect('clicked', self._on_preferences)
+        header.pack_end(prefs_btn)
+
         root.add_top_bar(header)
 
         self._build_radio_page()
         self._build_mp3_page()
 
         now_playing = self._build_now_playing()
+        now_playing.add_css_class('now-playing-translucent')
+
+        self._cover_bg_picture = Gtk.Picture()
+        self._cover_bg_picture.set_content_fit(Gtk.ContentFit.COVER)
+        self._cover_bg_picture.set_can_shrink(True)
+        self._cover_bg_picture.set_visible(False)
+
+        self._cover_dim_layer = Gtk.Box()
+        self._cover_dim_layer.add_css_class('cover-dim-layer')
+        self._cover_dim_layer.set_visible(False)
+
+        content_overlay = Gtk.Overlay()
+        content_overlay.set_child(self._cover_bg_picture)
+        content_overlay.add_overlay(self._cover_dim_layer)
+        content_overlay.add_overlay(now_playing)
 
         if _HAS_OVERLAY_SPLIT:
             self._split_view = Adw.OverlaySplitView()
             self._split_view.set_sidebar(self._view_stack)
-            self._split_view.set_content(now_playing)
+            self._split_view.set_content(content_overlay)
             self._split_view.set_sidebar_width_fraction(0.38)
             self._split_view.set_min_sidebar_width(260)
             self._split_view.set_max_sidebar_width(440)
@@ -842,6 +1108,8 @@ class RadioWindow(Adw.ApplicationWindow):
                 'active', self._split_view, 'show-sidebar',
                 GObject.BindingFlags.BIDIRECTIONAL | GObject.BindingFlags.SYNC_CREATE,
             )
+            self._split_view.connect('notify::show-sidebar',
+                                      lambda *_a: self._update_cover_display_mode())
             if _HAS_BREAKPOINT:
                 try:
                     cond = Adw.BreakpointCondition.parse('max-width: 640sp')
@@ -857,7 +1125,7 @@ class RadioWindow(Adw.ApplicationWindow):
             paned.set_shrink_start_child(False)
             paned.set_shrink_end_child(False)
             paned.set_start_child(self._view_stack)
-            paned.set_end_child(now_playing)
+            paned.set_end_child(content_overlay)
             split_container = paned
 
         controls = self._build_controls()
@@ -1122,8 +1390,11 @@ class RadioWindow(Adw.ApplicationWindow):
         bar.append(self._next_btn)
 
         self._mode_btn = Gtk.Button()
-        self._mode_btn.set_icon_name('media-playlist-consecutive-symbolic')
-        self._mode_btn.set_tooltip_text('Modo: Secuencial')
+        _mode_icon, _mode_label = next(
+            ((icon, label) for name, icon, label in self._PLAY_MODES if name == self._play_mode),
+            ('media-playlist-consecutive-symbolic', 'Modo: Secuencial'))
+        self._mode_btn.set_icon_name(_mode_icon)
+        self._mode_btn.set_tooltip_text(_mode_label)
         self._mode_btn.add_css_class('flat')
         self._mode_btn.set_visible(False)
         self._mode_btn.connect('clicked', self._on_toggle_play_mode)
@@ -1373,6 +1644,8 @@ class RadioWindow(Adw.ApplicationWindow):
         self._play_mode = _mode
         self._mode_btn.set_icon_name(icon)
         self._mode_btn.set_tooltip_text(label)
+        self._config['play_mode'] = _mode
+        threading.Thread(target=lambda: _save_config(self._config), daemon=True).start()
         toast = Adw.Toast(title=label)
         toast.set_timeout(1)
         self._toast_overlay.add_toast(toast)
@@ -1532,12 +1805,14 @@ class RadioWindow(Adw.ApplicationWindow):
         self._set_radio_mode(False)
 
         cover = row.tags.get('cover_data')
+        self._current_cover_data = cover
         pb = _pixbuf_from_bytes(cover, 160) if cover else None
         if pb:
             self._cover_image.set_from_pixbuf(pb)
         else:
             self._cover_image.set_from_icon_name('audio-x-generic')
             self._cover_image.set_pixel_size(160)
+        self._update_cover_display_mode()
 
         uri = 'file://' + urllib.parse.quote(row.path)
         self._player.play(uri)
@@ -1602,9 +1877,20 @@ class RadioWindow(Adw.ApplicationWindow):
         self._pos_label.set_text('0:00')
         self._spectrum_viz.reset()
         self._play_btn.set_icon_name('media-playback-start-symbolic')
+        self._current_cover_data = None
+        self._update_cover_display_mode()
 
     def _on_volume_changed(self, scale):
         self._player.set_volume(scale.get_value())
+        if self._volume_save_timer:
+            GLib.source_remove(self._volume_save_timer)
+        self._volume_save_timer = GLib.timeout_add(500, self._save_volume_now, scale.get_value())
+
+    def _save_volume_now(self, value):
+        self._volume_save_timer = None
+        self._config['volume'] = value
+        threading.Thread(target=lambda: _save_config(self._config), daemon=True).start()
+        return GLib.SOURCE_REMOVE
 
     def _on_seek(self, _scale, _scroll, value):
         _pos, dur = self._player.get_position()
@@ -1619,14 +1905,17 @@ class RadioWindow(Adw.ApplicationWindow):
             self._title_label.set_text(title)
             if self._is_radio and title != self._last_notified_title:
                 self._last_notified_title = title
-                self._notify_now_playing(title, artist or '')
+                if self._desktop_notifications:
+                    self._notify_now_playing(title, artist or '')
         if artist: self._artist_label.set_text(artist)
         if album:  self._album_label.set_text(album)
 
     def _on_cover_data(self, _player, data):
+        self._current_cover_data = data
         pb = _pixbuf_from_bytes(data, 160)
         if pb:
             self._cover_image.set_from_pixbuf(pb)
+        self._update_cover_display_mode()
 
     def _on_spectrum(self, _player, magnitudes):
         self._spectrum_viz.push(magnitudes)
@@ -1721,6 +2010,8 @@ class RadioWindow(Adw.ApplicationWindow):
         self._progress_box.set_visible(not is_radio)
 
     def _on_tab_switched(self, stack, _param):
+        if self._mode_btn is None:
+            return  # la pila puede emitir el cambio inicial antes de _build_controls()
         is_mp3 = stack.get_visible_child_name() == 'mp3'
         self._mode_btn.set_visible(is_mp3)
 
@@ -1802,7 +2093,7 @@ class RadioWindow(Adw.ApplicationWindow):
         if path in self._known_paths:
             return
         self._known_paths.add(path)
-        row = Mp3Row(path, tags)
+        row = Mp3Row(path, tags, on_edit=self._on_edit_mp3_tags)
         self._mp3_list.append(row)
 
     def _clear_mp3_list(self, _btn):
@@ -1810,6 +2101,216 @@ class RadioWindow(Adw.ApplicationWindow):
             self._mp3_list.remove(row)
         self._known_paths.clear()
         threading.Thread(target=lambda: _save_mp3_cache([]), daemon=True).start()
+
+    # ── Editar etiquetas MP3 ────────────────────────────────────────────────────
+
+    def _on_edit_mp3_tags(self, row):
+        tags = row.tags
+        dialog = Adw.MessageDialog(transient_for=self, heading='Editar etiquetas')
+        dialog.add_response('cancel', 'Cancelar')
+        dialog.add_response('save', 'Guardar')
+        dialog.set_response_appearance('save', Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response('save')
+
+        pending = {'cover_data': tags.get('cover_data'), 'cover_mime': 'image/jpeg'}
+
+        form = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        form.set_margin_top(8)
+
+        preview_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        preview_row.set_halign(Gtk.Align.CENTER)
+
+        preview_img = Gtk.Image()
+        preview_img.set_pixel_size(96)
+        preview_img.set_size_request(96, 96)
+        preview_row.append(preview_img)
+
+        cover_btns = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        cover_btns.set_valign(Gtk.Align.CENTER)
+        choose_btn = Gtk.Button(label='Elegir imagen…')
+        cover_btns.append(choose_btn)
+        auto_btn = Gtk.Button(label='Buscar carátula e info…')
+        cover_btns.append(auto_btn)
+        status_lbl = Gtk.Label(label='')
+        status_lbl.add_css_class('caption')
+        status_lbl.add_css_class('dim-label')
+        cover_btns.append(status_lbl)
+        preview_row.append(cover_btns)
+        form.append(preview_row)
+
+        def _labeled_entry(hint: str, value: str) -> Gtk.Entry:
+            entry = Gtk.Entry()
+            entry.set_text(value)
+            entry.set_hexpand(True)
+
+            hint_lbl = Gtk.Label(label=hint)
+            hint_lbl.add_css_class('caption')
+            hint_lbl.add_css_class('dim-label')
+            hint_lbl.set_width_chars(10)
+            hint_lbl.set_xalign(0)
+
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row_box.append(entry)
+            row_box.append(hint_lbl)
+            form.append(row_box)
+            return entry
+
+        title_e  = _labeled_entry('Título',      tags.get('title') or Path(row.path).stem)
+        artist_e = _labeled_entry('Artista',     tags.get('artist', ''))
+        album_e  = _labeled_entry('Álbum',       tags.get('album', ''))
+        track_e  = _labeled_entry('Nº de pista', tags.get('track', ''))
+
+        dialog.set_extra_child(form)
+
+        def _apply_cover(data, mime):
+            pending['cover_data'] = data
+            pending['cover_mime'] = mime
+            pb = _pixbuf_from_bytes(data, 96) if data else None
+            if pb:
+                preview_img.set_from_pixbuf(pb)
+            else:
+                preview_img.set_from_icon_name('audio-x-generic')
+
+        _apply_cover(pending['cover_data'], pending['cover_mime'])
+
+        def _on_choose_cover(_btn):
+            file_dialog = Gtk.FileDialog()
+            file_dialog.set_title('Elegir imagen de carátula')
+            img_filter = Gtk.FileFilter()
+            img_filter.set_name('Imágenes')
+            for ext in ('*.jpg', '*.jpeg', '*.png', '*.webp'):
+                img_filter.add_pattern(ext)
+            filters = Gio.ListStore.new(Gtk.FileFilter)
+            filters.append(img_filter)
+            file_dialog.set_filters(filters)
+
+            def _on_image_chosen(fd, result):
+                try:
+                    gfile = fd.open_finish(result)
+                except Exception:
+                    return
+                if not gfile:
+                    return
+                path = gfile.get_path()
+                try:
+                    _ok, data, _etag = gfile.load_contents()
+                except Exception:
+                    return
+                ctype, _uncertain = Gio.content_type_guess(path, data)
+                mime = Gio.content_type_get_mime_type(ctype) if ctype else 'image/jpeg'
+                _apply_cover(data, mime or 'image/jpeg')
+
+            file_dialog.open(self, None, _on_image_chosen)
+
+        choose_btn.connect('clicked', _on_choose_cover)
+
+        def _on_auto_search(_btn):
+            auto_btn.set_sensitive(False)
+            status_lbl.set_text('Buscando…')
+
+            def _cb(result, error):
+                def _apply():
+                    auto_btn.set_sensitive(True)
+                    if error:
+                        status_lbl.set_text('Error en la búsqueda')
+                    elif not result:
+                        status_lbl.set_text('Sin resultados')
+                    else:
+                        if result.get('title') and not title_e.get_text().strip():
+                            title_e.set_text(result['title'])
+                        if result.get('artist') and not artist_e.get_text().strip():
+                            artist_e.set_text(result['artist'])
+                        if result.get('album') and not album_e.get_text().strip():
+                            album_e.set_text(result['album'])
+                        if result.get('cover_data'):
+                            _apply_cover(result['cover_data'], result.get('cover_mime', 'image/jpeg'))
+                        status_lbl.set_text('Datos encontrados')
+                    return GLib.SOURCE_REMOVE
+                GLib.idle_add(_apply)
+
+            cover_lookup.search(artist_e.get_text().strip(), title_e.get_text().strip(),
+                                 album_e.get_text().strip(), _cb)
+
+        auto_btn.connect('clicked', _on_auto_search)
+
+        dialog.connect('response', lambda d, r: self._on_edit_mp3_tags_response(
+            d, r, row, pending, title_e, artist_e, album_e, track_e))
+        dialog.present()
+
+    def _on_edit_mp3_tags_response(self, _dialog, response, row, pending,
+                                    title_e, artist_e, album_e, track_e):
+        if response != 'save':
+            return
+
+        title  = title_e.get_text().strip()
+        artist = artist_e.get_text().strip()
+        album  = album_e.get_text().strip()
+        track  = track_e.get_text().strip()
+        cover_data = pending.get('cover_data')
+        cover_mime = pending.get('cover_mime', 'image/jpeg')
+
+        # Si el fichero está cargado en el reproductor hay que liberarlo antes de
+        # reescribirlo: GStreamer mantiene el fichero abierto y una escritura
+        # concurrente (sobre todo si cambia de tamaño, p.ej. al incrustar una
+        # carátula nueva) corrompe el stream en curso con un
+        # "gst-stream-error-quark: Internal data stream error".
+        editing_current_track = not self._is_radio and self._current_file == row.path
+        was_playing = editing_current_track and self._player.is_playing
+        if editing_current_track:
+            self._player.stop()
+
+        def _work():
+            try:
+                meta_mod.write_tags(row.path, title, artist, album, track,
+                                     cover_data, cover_mime)
+                error = None
+            except meta_mod.TagWriteError as exc:
+                error = str(exc)
+            GLib.idle_add(self._on_tags_saved, row, error, title, artist, album, track,
+                          cover_data, editing_current_track, was_playing)
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _on_tags_saved(self, row, error, title, artist, album, track, cover_data,
+                        editing_current_track=False, was_playing=False):
+        if error:
+            self._toast_overlay.add_toast(Adw.Toast(title=f'No se pudo guardar: {error}'))
+            return GLib.SOURCE_REMOVE
+
+        new_tags = dict(row.tags)
+        new_tags['title']      = title
+        new_tags['artist']     = artist
+        new_tags['album']      = album
+        new_tags['track']      = track
+        new_tags['cover_data'] = cover_data
+        row.refresh(new_tags)
+
+        if editing_current_track:
+            self._title_label.set_text(title or Path(row.path).stem)
+            self._artist_label.set_text(artist)
+            self._album_label.set_text(album)
+            self._current_cover_data = cover_data
+            pb = _pixbuf_from_bytes(cover_data, 160) if cover_data else None
+            if pb:
+                self._cover_image.set_from_pixbuf(pb)
+            else:
+                self._cover_image.set_from_icon_name('audio-x-generic')
+                self._cover_image.set_pixel_size(160)
+            self._update_cover_display_mode()
+            chips = {}
+            if album: chips['Álbum'] = album
+            if track: chips['Pista'] = track
+            self._update_meta_chips(chips)
+            if was_playing:
+                # Recargar el fichero (ya reescrito) desde el principio
+                uri = 'file://' + urllib.parse.quote(row.path)
+                self._player.play(uri)
+
+        self._save_mp3_cache_now()
+        toast = Adw.Toast(title='Etiquetas guardadas')
+        toast.set_timeout(2)
+        self._toast_overlay.add_toast(toast)
+        return GLib.SOURCE_REMOVE
 
     # ── Discover (Radio Browser API) ───────────────────────────────────────────
 
@@ -2098,19 +2599,84 @@ class RadioWindow(Adw.ApplicationWindow):
         except Exception:
             pass
 
+    # ── Preferencias ─────────────────────────────────────────────────────────────
+
+    def _on_preferences(self, _btn):
+        dialog = Adw.MessageDialog(transient_for=self, heading='Preferencias')
+        dialog.add_response('close', 'Cerrar')
+        dialog.set_default_response('close')
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.set_margin_top(8)
+
+        update_check_btn = Gtk.CheckButton(label='Buscar actualizaciones al iniciar la aplicación')
+        update_check_btn.set_active(self._check_updates_on_startup)
+        box.append(update_check_btn)
+
+        notif_check_btn = Gtk.CheckButton(label='Mostrar notificaciones de escritorio')
+        notif_check_btn.set_active(self._desktop_notifications)
+        box.append(notif_check_btn)
+
+        dialog.set_extra_child(box)
+
+        dialog.connect('response', lambda d, r: self._on_preferences_response(
+            d, r, update_check_btn, notif_check_btn))
+        dialog.present()
+
+    def _on_preferences_response(self, _dialog, _response, update_check_btn, notif_check_btn):
+        self._check_updates_on_startup = update_check_btn.get_active()
+        self._desktop_notifications    = notif_check_btn.get_active()
+        self._config['check_updates_on_startup'] = self._check_updates_on_startup
+        self._config['desktop_notifications']    = self._desktop_notifications
+        threading.Thread(target=lambda: _save_config(self._config), daemon=True).start()
+
+    # ── Comprobación de actualizaciones al iniciar ──────────────────────────────
+
+    def _check_updates_silently(self):
+        update_check.check_latest(
+            APP_VERSION,
+            lambda info, err: GLib.idle_add(self._on_startup_update_result, info, err))
+        return GLib.SOURCE_REMOVE
+
+    def _on_startup_update_result(self, info, _error):
+        if info and info.get('is_newer'):
+            toast = Adw.Toast(title=f"Hay una nueva versión disponible: v{info['version']}")
+            toast.set_button_label('Descargar')
+            toast.set_timeout(0)
+            toast.connect('button-clicked',
+                          lambda _t: Gtk.show_uri(self, info['download_url'], Gdk.CURRENT_TIME))
+            self._toast_overlay.add_toast(toast)
+        return GLib.SOURCE_REMOVE
+
     # ── Acerca de ─────────────────────────────────────────────────────────────
 
     def _on_about(self, _btn):
+        update_check.check_latest(APP_VERSION,
+                                   lambda info, err: GLib.idle_add(self._present_about, info, err))
+
+    def _present_about(self, update_info, _update_error):
         _icon_name = 'radioes'
+        comments = 'Reproductor de radio española online y archivos de audio locales\n\nMade with ❤ by SaruMan'
+
+        if update_info and update_info.get('is_newer'):
+            update_label = f"⬇ Descargar la nueva versión v{update_info['version']}"
+            update_uri = update_info['download_url']
+        elif update_info:
+            update_label = f'Buscar actualizaciones (tienes la última versión, v{APP_VERSION})'
+            update_uri = update_info['page_url']
+        else:
+            update_label = 'Buscar actualizaciones'
+            update_uri = update_check.RELEASES_PAGE_URL
+
         if hasattr(Adw, 'AboutDialog'):
             about = Adw.AboutDialog()
             about.set_application_name('RadioES')
             about.set_version(APP_VERSION)
             about.set_developer_name('SaruMan')
             about.set_license_type(Gtk.License.MIT_X11)
-            about.set_comments(
-                'Reproductor de radio española online y archivos de audio locales\n\nMade with ❤ by SaruMan')
+            about.set_comments(comments)
             about.set_application_icon(_icon_name)
+            about.add_link(update_label, update_uri)
             about.present(self)
         else:
             about = Adw.AboutWindow(transient_for=self)
@@ -2118,10 +2684,11 @@ class RadioWindow(Adw.ApplicationWindow):
             about.set_version(APP_VERSION)
             about.set_developer_name('SaruMan')
             about.set_license_type(Gtk.License.MIT_X11)
-            about.set_comments(
-                'Reproductor de radio española online y archivos de audio locales\n\nMade with ❤ by SaruMan')
+            about.set_comments(comments)
             about.set_application_icon(_icon_name)
+            about.add_link(update_label, update_uri)
             about.present()
+        return GLib.SOURCE_REMOVE
 
 
 # ── Formatting ─────────────────────────────────────────────────────────────────
