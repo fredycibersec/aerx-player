@@ -1372,11 +1372,14 @@ class RadioWindow(Adw.ApplicationWindow):
         self._artist_label.add_css_class('dim-label')
         self._artist_label.set_wrap(True)
         self._artist_label.set_justify(Gtk.Justification.CENTER)
+        self._artist_label.set_max_width_chars(28)
         info_box.append(self._artist_label)
 
         self._album_label = Gtk.Label(label='')
         self._album_label.add_css_class('caption')
         self._album_label.add_css_class('dim-label')
+        self._album_label.set_ellipsize(Pango.EllipsizeMode.END)
+        self._album_label.set_max_width_chars(28)
         info_box.append(self._album_label)
 
         box.append(info_box)
