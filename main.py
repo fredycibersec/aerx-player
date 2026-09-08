@@ -1820,7 +1820,6 @@ class RadioWindow(Adw.ApplicationWindow):
         self._set_radio_mode(True)
         self._player.play(row.station.get('url', ''))
         self._update_meta_chips({
-            'Género':  row.station.get('genre', ''),
             'Bitrate': f"{row.station.get('bitrate', '')}kbps",
         })
 
