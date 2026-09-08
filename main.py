@@ -28,7 +28,7 @@ import metadata as meta_mod
 
 Gst.init(None)
 
-APP_VERSION = '1.3.0'
+APP_VERSION = '1.3.1'
 
 DATA_DIR      = Path(__file__).parent / 'data'
 STATIONS_FILE = DATA_DIR / 'spanish_stations.json'
