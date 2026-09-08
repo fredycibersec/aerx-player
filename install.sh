@@ -31,10 +31,7 @@ echo "==> Instalando iconos…"
 ICON_SRC="$APP_DIR/data/icons"
 ICON_DST="$HOME/.local/share/icons/hicolor"
 
-install -Dm644 "$ICON_SRC/radioes.svg" \
-    "$ICON_DST/scalable/apps/radioes.svg"
-
-for SIZE in 48 64 128 256; do
+for SIZE in 48 64 128 256 512; do
     install -Dm644 "$ICON_SRC/radioes-${SIZE}.png" \
         "$ICON_DST/${SIZE}x${SIZE}/apps/radioes.png"
 done
