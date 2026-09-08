@@ -1828,6 +1828,8 @@ class RadioWindow(Adw.ApplicationWindow):
         else:
             self._cover_image.set_from_icon_name('m3-radio-symbolic')
             self._cover_image.set_pixel_size(160)
+            self._current_cover_data = None
+            self._update_cover_display_mode()
             favicon = row.station.get('favicon', '')
             if favicon and favicon.startswith('http'):
                 radio_browser.fetch_image(
@@ -2088,6 +2090,8 @@ class RadioWindow(Adw.ApplicationWindow):
         else:
             self._cover_image.set_from_icon_name('m3-radio-symbolic')
             self._cover_image.set_pixel_size(160)
+        self._current_cover_data = data
+        self._update_cover_display_mode()
 
     def _on_station_logo(self, data: bytes, row: 'StationRow'):
         if data:
