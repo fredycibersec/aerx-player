@@ -1,4 +1,7 @@
 # RadioES
+<p align=center>
+<img width="300" alt="radioes_icon" src="https://github.com/user-attachments/assets/88b11deb-c965-44f4-8d8d-4f87af4ab687" />
+</p>
 
 > Reproductor de radio española online y archivos de audio locales, con interfaz GTK4/Adwaita.
 
