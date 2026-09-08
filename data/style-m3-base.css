@@ -1,0 +1,240 @@
+/* RadioES — Material Design 3, capa base (forma / tipografía / elevación / estados)
+ * Independiente de esquema claro/oscuro: sólo referencia los @define-color
+ * que aportan style-m3-light.css / style-m3-dark.css, así que no necesita
+ * recargarse al cambiar de tema. */
+
+window {
+    font-family: 'Roboto', 'Google Sans Text', 'Noto Sans', sans-serif;
+}
+
+/* ── Escala tipográfica M3 (roles ya usados por la app como clases) ── */
+
+.title-1, .title-2 {
+    font-weight: 500;
+    font-size: 22px;
+}
+
+.heading {
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: 0.15px;
+}
+
+.body {
+    font-weight: 400;
+    font-size: 14px;
+    letter-spacing: 0.25px;
+}
+
+.caption {
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.4px;
+    opacity: 0.85;
+}
+
+.numeric {
+    font-feature-settings: "tnum";
+}
+
+/* ── Botones: shape scale "full" + capas de estado ── */
+
+button {
+    border-radius: 20px;
+    transition: background-color 150ms ease, box-shadow 150ms ease, color 150ms ease;
+}
+
+button.circular {
+    border-radius: 9999px;
+}
+
+button.flat {
+    background-color: transparent;
+    box-shadow: none;
+}
+
+button.flat:hover {
+    background-color: alpha(@accent_color, 0.08);
+}
+
+button.flat:active,
+button.flat:checked {
+    background-color: alpha(@accent_color, 0.12);
+}
+
+/* Botón "filled" (suggested-action) */
+button.suggested-action {
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
+    box-shadow: none;
+}
+
+button.suggested-action:hover {
+    background-color: mix(@accent_bg_color, @accent_fg_color, 0.92);
+}
+
+button.suggested-action:active {
+    background-color: mix(@accent_bg_color, @accent_fg_color, 0.88);
+}
+
+button.destructive-action {
+    background-color: @destructive_bg_color;
+    color: @destructive_fg_color;
+    box-shadow: none;
+}
+
+/* Botón de reproducir → FAB (Floating Action Button) M3 */
+button.m3-fab {
+    border-radius: 9999px;
+    box-shadow: 0 1px 3px 1px alpha(black, 0.15), 0 1px 2px alpha(black, 0.30);
+}
+
+button.m3-fab:hover {
+    box-shadow: 0 2px 6px 2px alpha(black, 0.15), 0 1px 2px alpha(black, 0.30);
+}
+
+/* ── Superficies elevadas (elevation level 1) ── */
+
+.card {
+    border-radius: 16px;
+    background-color: @card_bg_color;
+    color: @card_fg_color;
+    box-shadow: 0 1px 2px alpha(black, 0.30), 0 1px 3px 1px alpha(black, 0.15);
+}
+
+/* ── Listas ("boxed-list" → superficie contenedora M3) ── */
+
+list.boxed-list {
+    border-radius: 16px;
+    background-color: @card_bg_color;
+    box-shadow: none;
+    border: 1px solid @outline_variant;
+}
+
+list.boxed-list row {
+    border-radius: 0;
+    transition: background-color 150ms ease;
+}
+
+list.boxed-list row:hover {
+    background-color: alpha(@accent_color, 0.08);
+}
+
+list.boxed-list row:selected {
+    background-color: alpha(@accent_color, 0.12);
+}
+
+/* ── Chips (M3 assist chip, p.ej. badge de bitrate) ── */
+
+.m3-chip {
+    background-color: @secondary_container_color;
+    color: @on_secondary_container_color;
+    border-radius: 9999px;
+    padding: 2px 10px;
+    font-weight: 500;
+    font-size: 11px;
+    opacity: 1;
+}
+
+/* ── Campos de texto (M3 outlined text field) ── */
+
+entry {
+    border-radius: 12px;
+    background-color: @view_bg_color;
+    border: 1px solid @outline;
+    box-shadow: none;
+    transition: border-color 150ms ease;
+}
+
+entry:focus-within {
+    border-color: @accent_color;
+}
+
+/* ── Sliders (M3 slider: track + thumb) ── */
+
+scale trough {
+    background-color: @surface_variant_color;
+    border-radius: 9999px;
+    min-height: 6px;
+}
+
+scale highlight {
+    background-color: @accent_color;
+    border-radius: 9999px;
+}
+
+scale slider {
+    background-color: @accent_color;
+    border-radius: 9999px;
+    min-width: 18px;
+    min-height: 18px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    box-shadow: 0 1px 2px alpha(black, 0.30);
+}
+
+/* ── Indicador de progreso "wavy" M3 (barra de reproducción y volumen) ──
+ * Pista inactiva: línea fina plana. Indicador activo: onda repetida,
+ * el color exacto del trazo lo aporta wave-light.svg / wave-dark.svg
+ * (uno por esquema, referenciados desde style-m3-light/dark.css). */
+
+scale.m3-wavy trough {
+    min-height: 12px;
+    background-color: transparent;
+    /* pista plana (4dp, M3) + "stop indicator": punto fijo en el 100% del recorrido */
+    background-image:
+        radial-gradient(circle, @accent_color 45%, transparent 48%),
+        linear-gradient(@surface_variant_color, @surface_variant_color);
+    background-size: 6px 6px, 100% 4px;
+    background-repeat: no-repeat, no-repeat;
+    background-position: right center, center;
+}
+
+scale.m3-wavy highlight {
+    min-height: 12px;
+    background-color: transparent;
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: 20px 12px;
+    border-radius: 0;
+    /* hueco entre el indicador activo y la pista restante (M3: indicator-track gap) */
+    margin-right: 4px;
+}
+
+scale.m3-wavy slider {
+    min-width: 14px;
+    min-height: 14px;
+}
+
+/* ── Switches ── */
+
+switch {
+    border-radius: 9999px;
+    background-color: @surface_variant_color;
+}
+
+switch:checked {
+    background-color: @accent_bg_color;
+}
+
+switch slider {
+    border-radius: 9999px;
+}
+
+/* ── Barra superior (top app bar) ── */
+
+headerbar {
+    background-color: @headerbar_bg_color;
+    color: @headerbar_fg_color;
+    box-shadow: none;
+    border-bottom: 1px solid @headerbar_border_color;
+}
+
+/* ── Popovers / menús (elevation level 2) ── */
+
+popover.background,
+popover contents {
+    border-radius: 16px;
+    box-shadow: 0 2px 6px 2px alpha(black, 0.15), 0 1px 2px alpha(black, 0.30);
+}

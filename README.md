@@ -142,6 +142,7 @@ radioes/
 
 | Versión | Cambios destacados |
 |---------|-------------------|
+| 1.3.0   | Rediseño Material Design 3: paleta de color por tonos (claro/oscuro reactivo), forma y tipografía M3, indicadores de progreso "wavy" (barra de reproducción y volumen), iconografía completa con Material Symbols, nuevo icono de app |
 | 1.2.2   | Edición de etiquetas ID3/FLAC/MP4 con guardado en disco, búsqueda automática de carátula/info (MusicBrainz + Cover Art Archive, respaldo iTunes), fondo de carátula a pantalla completa con blur al ocultar el panel lateral |
 | 1.2.1   | Visualizador multi-modo (6 estilos: Gauss, barras agrupadas, osciloscopio, barras clásicas, radial, espejo) |
 | 1.2.0   | Visualizador de espectro en campana, modo shuffle/repeat/secuencial, sleep timer, notificaciones, mute por teclado, ordenación MP3 |

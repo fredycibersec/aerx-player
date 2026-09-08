@@ -28,7 +28,7 @@ import metadata as meta_mod
 
 Gst.init(None)
 
-APP_VERSION = '1.2.2'
+APP_VERSION = '1.3.0'
 
 DATA_DIR      = Path(__file__).parent / 'data'
 STATIONS_FILE = DATA_DIR / 'spanish_stations.json'
@@ -176,7 +176,7 @@ class StationRow(Gtk.ListBoxRow):
         self._logo = Gtk.Image()
         self._logo.set_pixel_size(40)
         self._logo.set_size_request(40, 40)
-        self._logo.set_from_icon_name('audio-x-generic')
+        self._logo.set_from_icon_name('m3-music-note-symbolic')
         box.append(self._logo)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
@@ -205,12 +205,11 @@ class StationRow(Gtk.ListBoxRow):
         br = station.get('bitrate', '')
         if br:
             badge = Gtk.Label(label=f"{br}k")
-            badge.add_css_class('caption')
-            badge.add_css_class('dim-label')
+            badge.add_css_class('m3-chip')
             box.append(badge)
 
         self._fav_btn = Gtk.Button()
-        self._fav_btn.set_icon_name('starred-symbolic' if is_favorite else 'non-starred-symbolic')
+        self._fav_btn.set_icon_name('m3-star-symbolic' if is_favorite else 'm3-star-outline-symbolic')
         self._fav_btn.add_css_class('flat')
         self._fav_btn.add_css_class('circular')
         self._fav_btn.set_valign(Gtk.Align.CENTER)
@@ -219,7 +218,7 @@ class StationRow(Gtk.ListBoxRow):
         box.append(self._fav_btn)
 
     def set_favorite(self, is_fav: bool):
-        self._fav_btn.set_icon_name('starred-symbolic' if is_fav else 'non-starred-symbolic')
+        self._fav_btn.set_icon_name('m3-star-symbolic' if is_fav else 'm3-star-outline-symbolic')
 
     def set_logo_bytes(self, data: bytes):
         self.logo_bytes = data
@@ -247,7 +246,7 @@ class GenreHeaderRow(Gtk.ListBoxRow):
         self.set_child(box)
 
         if genre == 'Favoritas':
-            star_img = Gtk.Image.new_from_icon_name('starred-symbolic')
+            star_img = Gtk.Image.new_from_icon_name('m3-star-symbolic')
             star_img.add_css_class('warning')
             box.append(star_img)
 
@@ -258,7 +257,7 @@ class GenreHeaderRow(Gtk.ListBoxRow):
         lbl.set_ellipsize(Pango.EllipsizeMode.END)
         box.append(lbl)
 
-        self._arrow = Gtk.Image.new_from_icon_name('pan-down-symbolic')
+        self._arrow = Gtk.Image.new_from_icon_name('m3-expand-more-symbolic')
         box.append(self._arrow)
 
         gc = Gtk.GestureClick()
@@ -267,7 +266,7 @@ class GenreHeaderRow(Gtk.ListBoxRow):
 
     def set_collapsed(self, collapsed: bool):
         self._arrow.set_from_icon_name(
-            'pan-end-symbolic' if collapsed else 'pan-down-symbolic'
+            'm3-chevron-right-symbolic' if collapsed else 'm3-expand-more-symbolic'
         )
 
 
@@ -309,7 +308,7 @@ class Mp3Row(Gtk.ListBoxRow):
         vbox.append(self._artist_lbl)
 
         self._edit_btn = Gtk.Button()
-        self._edit_btn.set_icon_name('document-edit-symbolic')
+        self._edit_btn.set_icon_name('m3-edit-symbolic')
         self._edit_btn.set_tooltip_text('Editar etiquetas')
         self._edit_btn.add_css_class('flat')
         self._edit_btn.add_css_class('circular')
@@ -328,9 +327,9 @@ class Mp3Row(Gtk.ListBoxRow):
             if pb:
                 self._art.set_from_pixbuf(pb)
             else:
-                self._art.set_from_icon_name('audio-x-generic')
+                self._art.set_from_icon_name('m3-music-note-symbolic')
         else:
-            self._art.set_from_icon_name('audio-x-generic')
+            self._art.set_from_icon_name('m3-music-note-symbolic')
 
         self._title_lbl.set_text(tags.get('title') or Path(self.path).stem)
         self._artist_lbl.set_text(tags.get('artist', ''))
@@ -381,7 +380,7 @@ class SpectrumVisualizer(Gtk.Overlay):
         self.set_hexpand(True)
 
         btn = Gtk.Button()
-        btn.set_icon_name('media-playlist-repeat-symbolic')
+        btn.set_icon_name('m3-sync-symbolic')
         btn.add_css_class('circular')
         btn.add_css_class('flat')
         btn.set_halign(Gtk.Align.END)
@@ -978,7 +977,9 @@ class RadioWindow(Adw.ApplicationWindow):
         self._current_cover_data  = None
         self._cover_fullscreen_active = False
 
+        self._install_material_icons()
         self._install_cover_bg_css()
+        self._install_material_css()
         self._sleep_btn           = None
         self._mp3_sort_mode       = 'filename'
         self._mp3_sort_btn        = None
@@ -1014,6 +1015,43 @@ class RadioWindow(Adw.ApplicationWindow):
             Gdk.Display.get_default(), provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
+
+    def _install_material_icons(self):
+        """Registra data/icons como raíz de tema de iconos adicional, para que los
+        -symbolic propios (Material Symbols descargados de fonts.google.com/icons)
+        se recoloreen automáticamente igual que los iconos symbolic de sistema."""
+        icon_theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+        icon_theme.add_search_path(str(DATA_DIR / 'icons'))
+
+    def _install_material_css(self):
+        """Carga la línea de diseño Material Design 3: forma/tipografía/elevación
+        (fija) + paleta de color (claro u oscuro, reactiva al tema del sistema)."""
+        display = Gdk.Display.get_default()
+
+        base_provider = Gtk.CssProvider()
+        base_provider.load_from_path(str(DATA_DIR / 'style-m3-base.css'))
+        Gtk.StyleContext.add_provider_for_display(
+            display, base_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
+        self._m3_scheme_provider = None
+        style_manager = Adw.StyleManager.get_default()
+        style_manager.connect('notify::dark', lambda *_a: self._apply_m3_scheme())
+        self._apply_m3_scheme()
+
+    def _apply_m3_scheme(self):
+        display = Gdk.Display.get_default()
+        if self._m3_scheme_provider is not None:
+            Gtk.StyleContext.remove_provider_for_display(display, self._m3_scheme_provider)
+
+        dark = Adw.StyleManager.get_default().get_dark()
+        fname = 'style-m3-dark.css' if dark else 'style-m3-light.css'
+        provider = Gtk.CssProvider()
+        provider.load_from_path(str(DATA_DIR / fname))
+        Gtk.StyleContext.add_provider_for_display(
+            display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1,
+        )
+        self._m3_scheme_provider = provider
 
     def _update_cover_display_mode(self):
         """Decide fullscreen-blur-background vs small-thumbnail mode for the cover."""
@@ -1056,20 +1094,20 @@ class RadioWindow(Adw.ApplicationWindow):
 
         if _HAS_OVERLAY_SPLIT:
             self._sidebar_btn = Gtk.ToggleButton()
-            self._sidebar_btn.set_icon_name('sidebar-show-symbolic')
+            self._sidebar_btn.set_icon_name('m3-dock-left-symbolic')
             self._sidebar_btn.set_tooltip_text('Mostrar/ocultar panel lateral')
             self._sidebar_btn.set_active(True)
             header.pack_start(self._sidebar_btn)
 
         about_btn = Gtk.Button()
-        about_btn.set_icon_name('help-about-symbolic')
+        about_btn.set_icon_name('m3-info-symbolic')
         about_btn.set_tooltip_text('Acerca de RadioES')
         about_btn.add_css_class('flat')
         about_btn.connect('clicked', self._on_about)
         header.pack_end(about_btn)
 
         prefs_btn = Gtk.Button()
-        prefs_btn.set_icon_name('preferences-system-symbolic')
+        prefs_btn.set_icon_name('m3-settings-symbolic')
         prefs_btn.set_tooltip_text('Preferencias')
         prefs_btn.add_css_class('flat')
         prefs_btn.connect('clicked', self._on_preferences)
@@ -1158,21 +1196,21 @@ class RadioWindow(Adw.ApplicationWindow):
         search_bar.append(self._radio_search)
 
         discover_btn = Gtk.Button()
-        discover_btn.set_icon_name('network-wireless-symbolic')
+        discover_btn.set_icon_name('m3-explore-symbolic')
         discover_btn.set_tooltip_text('Descubrir más emisoras (Radio Browser)')
         discover_btn.add_css_class('flat')
         discover_btn.connect('clicked', self._on_discover)
         search_bar.append(discover_btn)
 
         add_btn = Gtk.Button()
-        add_btn.set_icon_name('list-add-symbolic')
+        add_btn.set_icon_name('m3-add-symbolic')
         add_btn.set_tooltip_text('Añadir emisora manualmente')
         add_btn.add_css_class('flat')
         add_btn.connect('clicked', self._on_add_station)
         search_bar.append(add_btn)
 
         fav_menu_btn = Gtk.MenuButton()
-        fav_menu_btn.set_icon_name('document-save-symbolic')
+        fav_menu_btn.set_icon_name('m3-save-symbolic')
         fav_menu_btn.set_tooltip_text('Exportar / Importar favoritos')
         fav_menu_btn.add_css_class('flat')
         fav_popover = Gtk.Popover()
@@ -1215,7 +1253,7 @@ class RadioWindow(Adw.ApplicationWindow):
         page_box.append(scroll)
 
         self._view_stack.add_titled_with_icon(
-            page_box, 'radio', 'Radio', 'audio-input-microphone-symbolic'
+            page_box, 'radio', 'Radio', 'm3-radio-symbolic'
         )
 
     def _build_mp3_page(self):
@@ -1226,7 +1264,7 @@ class RadioWindow(Adw.ApplicationWindow):
         folder_bar.set_margin_start(8); folder_bar.set_margin_end(8)
         folder_bar.set_margin_top(8);   folder_bar.set_margin_bottom(4)
 
-        folder_icon = Gtk.Image.new_from_icon_name('folder-music-symbolic')
+        folder_icon = Gtk.Image.new_from_icon_name('m3-library-music-symbolic')
         folder_bar.append(folder_icon)
 
         self._folder_label = Gtk.Label(label=self._music_folder)
@@ -1237,14 +1275,14 @@ class RadioWindow(Adw.ApplicationWindow):
         folder_bar.append(self._folder_label)
 
         choose_btn = Gtk.Button()
-        choose_btn.set_icon_name('document-open-symbolic')
+        choose_btn.set_icon_name('m3-folder-open-symbolic')
         choose_btn.set_tooltip_text('Elegir carpeta de música')
         choose_btn.add_css_class('flat')
         choose_btn.connect('clicked', self._on_choose_folder)
         folder_bar.append(choose_btn)
 
         self._scan_btn = Gtk.Button()
-        self._scan_btn.set_icon_name('view-refresh-symbolic')
+        self._scan_btn.set_icon_name('m3-refresh-symbolic')
         self._scan_btn.set_tooltip_text('Escanear carpeta de música y subcarpetas')
         self._scan_btn.add_css_class('flat')
         self._scan_btn.connect('clicked', self._on_scan_folder)
@@ -1270,7 +1308,7 @@ class RadioWindow(Adw.ApplicationWindow):
         bar.append(clear_btn)
 
         self._mp3_sort_btn = Gtk.Button()
-        self._mp3_sort_btn.set_icon_name('view-sort-ascending-symbolic')
+        self._mp3_sort_btn.set_icon_name('m3-sort-alpha-symbolic')
         self._mp3_sort_btn.set_tooltip_text('Ordenar: Nombre de archivo')
         self._mp3_sort_btn.add_css_class('flat')
         self._mp3_sort_btn.connect('clicked', self._on_mp3_sort_toggle)
@@ -1295,7 +1333,7 @@ class RadioWindow(Adw.ApplicationWindow):
         mp3_box.append(scroll)
 
         self._view_stack.add_titled_with_icon(
-            mp3_box, 'mp3', 'MP3', 'audio-x-generic-symbolic'
+            mp3_box, 'mp3', 'MP3', 'm3-music-note-symbolic'
         )
 
     def _build_now_playing(self) -> Gtk.Widget:
@@ -1310,7 +1348,7 @@ class RadioWindow(Adw.ApplicationWindow):
 
         self._cover_image = Gtk.Image()
         self._cover_image.set_pixel_size(160)
-        self._cover_image.set_from_icon_name('audio-x-generic')
+        self._cover_image.set_from_icon_name('m3-music-note-symbolic')
         self._cover_image.set_size_request(160, 160)
         self._cover_image.set_margin_start(8)
         self._cover_image.set_margin_end(8)
@@ -1364,27 +1402,28 @@ class RadioWindow(Adw.ApplicationWindow):
         bar.set_margin_top(8);    bar.set_margin_bottom(8)
 
         self._prev_btn = Gtk.Button()
-        self._prev_btn.set_icon_name('media-skip-backward-symbolic')
+        self._prev_btn.set_icon_name('m3-skip-previous-symbolic')
         self._prev_btn.add_css_class('circular')
         self._prev_btn.connect('clicked', self._on_prev_track)
         bar.append(self._prev_btn)
 
         self._play_btn = Gtk.Button()
-        self._play_btn.set_icon_name('media-playback-start-symbolic')
+        self._play_btn.set_icon_name('m3-play-arrow-symbolic')
         self._play_btn.add_css_class('circular')
         self._play_btn.add_css_class('suggested-action')
-        self._play_btn.set_size_request(48, 48)
+        self._play_btn.add_css_class('m3-fab')
+        self._play_btn.set_size_request(56, 56)
         self._play_btn.connect('clicked', self._on_play_pause)
         bar.append(self._play_btn)
 
         stop_btn = Gtk.Button()
-        stop_btn.set_icon_name('media-playback-stop-symbolic')
+        stop_btn.set_icon_name('m3-stop-symbolic')
         stop_btn.add_css_class('circular')
         stop_btn.connect('clicked', self._on_stop)
         bar.append(stop_btn)
 
         self._next_btn = Gtk.Button()
-        self._next_btn.set_icon_name('media-skip-forward-symbolic')
+        self._next_btn.set_icon_name('m3-skip-next-symbolic')
         self._next_btn.add_css_class('circular')
         self._next_btn.connect('clicked', self._on_next_track)
         bar.append(self._next_btn)
@@ -1392,7 +1431,7 @@ class RadioWindow(Adw.ApplicationWindow):
         self._mode_btn = Gtk.Button()
         _mode_icon, _mode_label = next(
             ((icon, label) for name, icon, label in self._PLAY_MODES if name == self._play_mode),
-            ('media-playlist-consecutive-symbolic', 'Modo: Secuencial'))
+            ('m3-playlist-play-symbolic', 'Modo: Secuencial'))
         self._mode_btn.set_icon_name(_mode_icon)
         self._mode_btn.set_tooltip_text(_mode_label)
         self._mode_btn.add_css_class('flat')
@@ -1411,6 +1450,7 @@ class RadioWindow(Adw.ApplicationWindow):
         self._seek_bar = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 1, 0.01)
         self._seek_bar.set_hexpand(True)
         self._seek_bar.set_draw_value(False)
+        self._seek_bar.add_css_class('m3-wavy')
         self._seek_bar.connect('change-value', self._on_seek)
         self._progress_box.append(self._seek_bar)
 
@@ -1433,18 +1473,19 @@ class RadioWindow(Adw.ApplicationWindow):
         bar.append(self._live_box)
         self._live_box.set_visible(False)
 
-        vol_icon = Gtk.Image.new_from_icon_name('audio-volume-high-symbolic')
+        vol_icon = Gtk.Image.new_from_icon_name('m3-volume-up-symbolic')
         bar.append(vol_icon)
 
         self._vol_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 1, 0.05)
         self._vol_scale.set_value(self._player.get_volume())
         self._vol_scale.set_size_request(100, -1)
         self._vol_scale.set_draw_value(False)
+        self._vol_scale.add_css_class('m3-wavy')
         self._vol_scale.connect('value-changed', self._on_volume_changed)
         bar.append(self._vol_scale)
 
         self._sleep_btn = Gtk.MenuButton()
-        self._sleep_btn.set_icon_name('alarm-symbolic')
+        self._sleep_btn.set_icon_name('m3-alarm-symbolic')
         self._sleep_btn.set_tooltip_text('Sleep timer')
         self._sleep_btn.add_css_class('flat')
         sleep_pop = Gtk.Popover()
@@ -1527,10 +1568,10 @@ class RadioWindow(Adw.ApplicationWindow):
         url = station.get('url', '')
         if url in self._favorites:
             self._favorites.discard(url)
-            btn.set_icon_name('non-starred-symbolic')
+            btn.set_icon_name('m3-star-outline-symbolic')
         else:
             self._favorites.add(url)
-            btn.set_icon_name('starred-symbolic')
+            btn.set_icon_name('m3-star-symbolic')
         self._config['favorites'] = list(self._favorites)
         threading.Thread(target=lambda: _save_config(self._config), daemon=True).start()
         self._radio_list.invalidate_sort()
@@ -1605,7 +1646,7 @@ class RadioWindow(Adw.ApplicationWindow):
             return
 
         self._scan_btn.set_sensitive(False)
-        self._scan_btn.set_icon_name('process-working-symbolic')
+        self._scan_btn.set_icon_name('m3-autorenew-symbolic')
 
         def _scan():
             exts     = {'.mp3', '.flac', '.ogg', '.m4a', '.aac', '.wav', '.opus'}
@@ -1623,7 +1664,7 @@ class RadioWindow(Adw.ApplicationWindow):
 
     def _on_scan_done(self, added: int):
         self._scan_btn.set_sensitive(True)
-        self._scan_btn.set_icon_name('view-refresh-symbolic')
+        self._scan_btn.set_icon_name('m3-refresh-symbolic')
         self._save_mp3_cache_now()
         msg = (f'Se encontraron {added} canciones nuevas (incluyendo subcarpetas)'
                if added else 'No hay canciones nuevas')
@@ -1632,9 +1673,9 @@ class RadioWindow(Adw.ApplicationWindow):
     # ── Play mode ──────────────────────────────────────────────────────────────
 
     _PLAY_MODES = [
-        ('sequential', 'media-playlist-consecutive-symbolic', 'Modo: Secuencial'),
-        ('repeat',     'media-playlist-repeat-symbolic',      'Modo: Repetir lista'),
-        ('shuffle',    'media-playlist-shuffle-symbolic',     'Modo: Aleatorio'),
+        ('sequential', 'm3-playlist-play-symbolic', 'Modo: Secuencial'),
+        ('repeat',     'm3-repeat-symbolic',      'Modo: Repetir lista'),
+        ('shuffle',    'm3-shuffle-symbolic',     'Modo: Aleatorio'),
     ]
 
     def _on_toggle_play_mode(self, _btn):
@@ -1783,7 +1824,7 @@ class RadioWindow(Adw.ApplicationWindow):
         if row.logo_bytes:
             self._set_cover_from_bytes(row.logo_bytes)
         else:
-            self._cover_image.set_from_icon_name('audio-input-microphone')
+            self._cover_image.set_from_icon_name('m3-radio-symbolic')
             self._cover_image.set_pixel_size(160)
             favicon = row.station.get('favicon', '')
             if favicon and favicon.startswith('http'):
@@ -1810,7 +1851,7 @@ class RadioWindow(Adw.ApplicationWindow):
         if pb:
             self._cover_image.set_from_pixbuf(pb)
         else:
-            self._cover_image.set_from_icon_name('audio-x-generic')
+            self._cover_image.set_from_icon_name('m3-music-note-symbolic')
             self._cover_image.set_pixel_size(160)
         self._update_cover_display_mode()
 
@@ -1876,7 +1917,7 @@ class RadioWindow(Adw.ApplicationWindow):
         self._seek_bar.set_value(0)
         self._pos_label.set_text('0:00')
         self._spectrum_viz.reset()
-        self._play_btn.set_icon_name('media-playback-start-symbolic')
+        self._play_btn.set_icon_name('m3-play-arrow-symbolic')
         self._current_cover_data = None
         self._update_cover_display_mode()
 
@@ -1967,7 +2008,7 @@ class RadioWindow(Adw.ApplicationWindow):
             i += 1
 
     def _on_state_changed(self, _player, playing):
-        icon = 'media-playback-pause-symbolic' if playing else 'media-playback-start-symbolic'
+        icon = 'm3-pause-symbolic' if playing else 'm3-play-arrow-symbolic'
         self._play_btn.set_icon_name(icon)
         if playing:
             if not self._is_radio:
@@ -2043,7 +2084,7 @@ class RadioWindow(Adw.ApplicationWindow):
         if pb:
             self._cover_image.set_from_pixbuf(pb)
         else:
-            self._cover_image.set_from_icon_name('audio-input-microphone')
+            self._cover_image.set_from_icon_name('m3-radio-symbolic')
             self._cover_image.set_pixel_size(160)
 
     def _on_station_logo(self, data: bytes, row: 'StationRow'):
@@ -2169,7 +2210,7 @@ class RadioWindow(Adw.ApplicationWindow):
             if pb:
                 preview_img.set_from_pixbuf(pb)
             else:
-                preview_img.set_from_icon_name('audio-x-generic')
+                preview_img.set_from_icon_name('m3-music-note-symbolic')
 
         _apply_cover(pending['cover_data'], pending['cover_mime'])
 
@@ -2294,7 +2335,7 @@ class RadioWindow(Adw.ApplicationWindow):
             if pb:
                 self._cover_image.set_from_pixbuf(pb)
             else:
-                self._cover_image.set_from_icon_name('audio-x-generic')
+                self._cover_image.set_from_icon_name('m3-music-note-symbolic')
                 self._cover_image.set_pixel_size(160)
             self._update_cover_display_mode()
             chips = {}
@@ -2552,10 +2593,10 @@ class RadioWindow(Adw.ApplicationWindow):
     # ── Ordenar MP3 ───────────────────────────────────────────────────────────
 
     _MP3_SORT_MODES = [
-        ('filename', 'view-sort-ascending-symbolic', 'Ordenar: Nombre de archivo'),
-        ('title',    'format-text-rich-symbolic',    'Ordenar: Título'),
-        ('artist',   'system-users-symbolic',        'Ordenar: Artista'),
-        ('album',    'media-optical-symbolic',       'Ordenar: Álbum'),
+        ('filename', 'm3-sort-alpha-symbolic', 'Ordenar: Nombre de archivo'),
+        ('title',    'm3-title-symbolic',      'Ordenar: Título'),
+        ('artist',   'm3-person-symbolic',     'Ordenar: Artista'),
+        ('album',    'm3-album-symbolic',      'Ordenar: Álbum'),
     ]
 
     def _on_mp3_sort_toggle(self, _btn):
