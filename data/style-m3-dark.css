@@ -1,0 +1,73 @@
+/* RadioES — Material Design 3, esquema oscuro
+ * Paleta tonal derivada del seed #0F74BD ("Azul difusión/radio").
+ * Redefine los colores con nombre de libadwaita + roles M3 propios,
+ * consumidos por style-m3-base.css. */
+
+@define-color accent_color            #A1D3F7;
+@define-color accent_bg_color         #A1D3F7;
+@define-color accent_fg_color         #103956;
+
+@define-color destructive_color       #F2B8B5;
+@define-color destructive_bg_color    #F2B8B5;
+@define-color destructive_fg_color    #601410;
+@define-color error_color             #F2B8B5;
+@define-color error_bg_color          #F2B8B5;
+@define-color error_fg_color          #601410;
+
+@define-color success_color           #7FDB94;
+@define-color success_bg_color        #7FDB94;
+@define-color success_fg_color        #00390F;
+
+@define-color warning_color           #FFB300;
+@define-color warning_bg_color        #FFB300;
+@define-color warning_fg_color        #402D00;
+
+@define-color window_bg_color         #0F0F10;
+@define-color window_fg_color         #E5E6E6;
+@define-color view_bg_color           #0A0A0A;
+@define-color view_fg_color           #E5E6E6;
+
+@define-color headerbar_bg_color           #1E1F1F;
+@define-color headerbar_fg_color           #E5E6E6;
+@define-color headerbar_border_color       #444E55;
+@define-color headerbar_backdrop_color     #0F0F10;
+@define-color headerbar_shade_color        rgba(0,0,0,0.25);
+@define-color headerbar_darker_shade_color rgba(0,0,0,0.4);
+
+@define-color card_bg_color           #191A1A;
+@define-color card_fg_color           #E5E6E6;
+@define-color card_shade_color        rgba(0,0,0,0.2);
+
+@define-color dialog_bg_color         #2A2B2D;
+@define-color dialog_fg_color         #E5E6E6;
+
+@define-color popover_bg_color        #1E1F1F;
+@define-color popover_fg_color        #E5E6E6;
+@define-color popover_shade_color     rgba(0,0,0,0.2);
+
+@define-color shade_color             rgba(0,0,0,0.3);
+@define-color scrollbar_outline_color rgba(0,0,0,0.5);
+
+@define-color sidebar_bg_color        #191A1A;
+@define-color sidebar_fg_color        #E5E6E6;
+@define-color sidebar_backdrop_color  #0A0A0A;
+@define-color sidebar_shade_color     rgba(0,0,0,0.2);
+@define-color sidebar_border_color    #444E55;
+
+/* Roles M3 sin equivalente directo en libadwaita */
+@define-color outline                 #8E9BA4;
+@define-color outline_variant         #444E55;
+@define-color surface_variant_color   #444E55;
+
+@define-color secondary_container_color     #3C4F5D;
+@define-color on_secondary_container_color  #E1E6EA;
+
+@define-color tertiary_color                 #C9BCDC;
+@define-color on_tertiary_color               #312640;
+@define-color tertiary_container_color        #483465;
+@define-color on_tertiary_container_color     #E4DFEC;
+
+/* Indicador de progreso "wavy" (ver style-m3-base.css) */
+scale.m3-wavy highlight {
+    background-image: url("wave-dark.svg");
+}

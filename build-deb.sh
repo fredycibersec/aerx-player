@@ -7,7 +7,7 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 
 PKG_NAME="radioes"
-PKG_VERSION="1.2.2"
+PKG_VERSION="1.3.0"
 PKG_ARCH="all"
 PKG_FILE="${PKG_NAME}_${PKG_VERSION}_${PKG_ARCH}.deb"
 
@@ -40,6 +40,16 @@ done
 # Datos
 install -m644 "$APP_DIR/data/spanish_stations.json" \
               "$STAGE/$INSTALL_DIR/data/spanish_stations.json"
+
+# Estilos Material Design 3
+for f in style-m3-base.css style-m3-light.css style-m3-dark.css wave-light.svg wave-dark.svg; do
+    install -m644 "$APP_DIR/data/$f" "$STAGE/$INSTALL_DIR/data/$f"
+done
+
+# Iconos Material Symbols (tema symbolic propio, cargado vía add_search_path)
+install -d "$STAGE/$INSTALL_DIR/data/icons/hicolor/scalable/actions"
+install -m644 "$APP_DIR"/data/icons/hicolor/scalable/actions/*.svg \
+              "$STAGE/$INSTALL_DIR/data/icons/hicolor/scalable/actions/"
 
 # Lanzador en /usr/bin
 cat > "$STAGE/usr/bin/radioes" << 'LAUNCHER'
