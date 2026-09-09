@@ -1,0 +1,36 @@
+name: 💡 Proponer una mejora
+description: Sugiere una nueva funcionalidad o una mejora para ÆRx Player
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Antes de abrir la propuesta, échale un vistazo a los [issues abiertos](../../issues) por si ya existe algo parecido.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: ¿Qué problema resuelve o qué mejora aporta?
+      description: Describe la situación actual y por qué no es ideal
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Solución propuesta
+      description: Cómo te imaginas que funcionaría
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Otras formas de resolverlo que hayas pensado (opcional)
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Contexto adicional
+      description: Capturas, mockups, enlaces a apps similares, etc.
