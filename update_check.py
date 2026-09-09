@@ -1,6 +1,7 @@
 """Check GitHub Releases for a newer ÆRx Player version."""
 
 import json
+import re
 import threading
 from typing import Callable
 
@@ -29,14 +30,25 @@ RELEASES_API_URL  = f'https://api.github.com/repos/{GITHUB_REPO}/releases/latest
 RELEASES_PAGE_URL = f'https://github.com/{GITHUB_REPO}/releases/latest'
 
 
+_LEADING_DIGITS = re.compile(r'^\d+')
+
+
 def _parse_version(v: str) -> tuple:
+    """Extrae solo el prefijo numérico de cada segmento separado por ".".
+
+    Coger TODOS los dígitos del segmento (aunque estén tras un sufijo como
+    "-beta2") mezclaría el número de versión real con el del sufijo (p.ej.
+    "5-post3" -> dígitos "53" -> 53, que compararía por encima de "15").
+    Cortando en el primer carácter no numérico, "5-post3" y "5" comparan
+    igual, y el sufijo simplemente no participa en el orden.
+    """
     v = (v or '').strip()
     if v[:1].lower() == 'v':
         v = v[1:]
     parts = []
     for p in v.split('.'):
-        digits = ''.join(c for c in p if c.isdigit())
-        parts.append(int(digits) if digits else 0)
+        m = _LEADING_DIGITS.match(p)
+        parts.append(int(m.group()) if m else 0)
     return tuple(parts) if parts else (0,)
 
 

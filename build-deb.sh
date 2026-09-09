@@ -7,7 +7,7 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 
 PKG_NAME="aerx-player"
-PKG_VERSION="0.99-beta"
+PKG_VERSION="${PKG_VERSION:-0.99-beta}"
 PKG_ARCH="all"
 PKG_FILE="${PKG_NAME}_${PKG_VERSION}_${PKG_ARCH}.deb"
 

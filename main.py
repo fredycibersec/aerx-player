@@ -6,7 +6,9 @@ import json
 import base64
 import datetime
 import hashlib
+import os
 import shutil
+import tempfile
 import threading
 import urllib.parse
 import zlib
@@ -158,13 +160,29 @@ def _load_config() -> dict:
         return {}
 
 
-def _save_config(cfg: dict):
+_SAVE_LOCK = threading.Lock()
+
+
+def _atomic_write_json(path: Path, data) -> None:
+    """Escritura atómica y serializada: evita que dos hilos (p.ej. guardar
+    ajustes y guardar caché de podcasts casi a la vez) entrelacen bytes del
+    mismo fichero y lo corrompan en silencio."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(cfg, f, indent=2)
-    except Exception:
-        pass
+    with _SAVE_LOCK:
+        fd, tmp_path = tempfile.mkstemp(dir=str(CONFIG_DIR), prefix=f'.{path.name}.', suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp_path, path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+
+def _save_config(cfg: dict):
+    _atomic_write_json(CONFIG_FILE, cfg)
 
 
 def _load_mp3_cache() -> list:
@@ -177,12 +195,7 @@ def _load_mp3_cache() -> list:
 
 
 def _save_mp3_cache(tracks: list):
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        with open(CACHE_FILE, 'w') as f:
-            json.dump(tracks, f, indent=2)
-    except Exception:
-        pass
+    _atomic_write_json(CACHE_FILE, tracks)
 
 
 def _load_podcasts_data() -> dict:
@@ -199,12 +212,7 @@ def _load_podcasts_data() -> dict:
 
 
 def _save_podcasts_data(data: dict):
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        with open(PODCASTS_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
-    except Exception:
-        pass
+    _atomic_write_json(PODCASTS_FILE, data)
 
 
 def _episode_download_path(guid: str, audio_url: str) -> Path:
