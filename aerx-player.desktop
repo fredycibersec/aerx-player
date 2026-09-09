@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ÆRx Player
+GenericName=Radio y Audio
+Comment=Radio online y reproductor de archivos de audio locales
+Exec=AERX_BIN
+Icon=aerx-player
+Terminal=false
+Categories=AudioVideo;Audio;Player;Music;
+Keywords=radio;música;mp3;emisoras;audio;podcast;spectrum;
+StartupNotify=true
+StartupWMClass=es.aerx.player

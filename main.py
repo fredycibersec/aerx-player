@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""RadioES – Reproductor de radio española online y archivos MP3 (GTK4/Adwaita)."""
+"""ÆRx Player – Radio y Audio. Reproductor de radio online y archivos MP3 (GTK4/Adwaita)."""
 
 import sys
 import json
 import base64
+import datetime
+import hashlib
+import shutil
 import threading
 import urllib.parse
+import zlib
 from pathlib import Path
 
 import gi
@@ -24,17 +28,38 @@ from player import Player
 import radio_browser
 import cover_lookup
 import update_check
+import podcasts
 import metadata as meta_mod
 
 Gst.init(None)
 
-APP_VERSION = '1.3.2'
+APP_VERSION = '0.99-beta'
+KOFI_URL    = 'https://ko-fi.com/saruman_dev'
 
 DATA_DIR      = Path(__file__).parent / 'data'
 STATIONS_FILE = DATA_DIR / 'spanish_stations.json'
-CONFIG_DIR    = Path.home() / '.local' / 'share' / 'radioes'
+CONFIG_DIR    = Path.home() / '.local' / 'share' / 'aerx-player'
 CONFIG_FILE   = CONFIG_DIR / 'config.json'
 CACHE_FILE    = CONFIG_DIR / 'mp3_cache.json'
+PODCASTS_FILE = CONFIG_DIR / 'podcasts.json'
+PODCAST_DOWNLOAD_DIR = CONFIG_DIR / 'podcast_downloads'
+
+_LEGACY_CONFIG_DIR = Path.home() / '.local' / 'share' / 'radioes'
+
+
+def _migrate_legacy_config_dir():
+    """Migra la config de la beta anterior (RadioES, ~/.local/share/radioes) a la
+    nueva ruta de ÆRx Player en el primer arranque tras el rebrand. No pisa una
+    carpeta nueva que ya exista (p.ej. tras una instalación limpia)."""
+    if CONFIG_DIR.exists() or not _LEGACY_CONFIG_DIR.exists():
+        return
+    try:
+        shutil.move(str(_LEGACY_CONFIG_DIR), str(CONFIG_DIR))
+    except OSError:
+        pass
+
+
+_migrate_legacy_config_dir()
 
 _HAS_OVERLAY_SPLIT = hasattr(Adw, 'OverlaySplitView')
 _HAS_BREAKPOINT    = hasattr(Adw, 'Breakpoint')
@@ -160,6 +185,54 @@ def _save_mp3_cache(tracks: list):
         pass
 
 
+def _load_podcasts_data() -> dict:
+    try:
+        with open(PODCASTS_FILE) as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                data.setdefault('subscriptions', [])
+                data.setdefault('episodes', {})
+                return data
+    except Exception:
+        pass
+    return {'subscriptions': [], 'episodes': {}}
+
+
+def _save_podcasts_data(data: dict):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(PODCASTS_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
+
+def _episode_download_path(guid: str, audio_url: str) -> Path:
+    ext = Path(urllib.parse.urlparse(audio_url).path).suffix or '.mp3'
+    name = hashlib.sha1(guid.encode('utf-8')).hexdigest()
+    return PODCAST_DOWNLOAD_DIR / f'{name}{ext}'
+
+
+def _fmt_duration_short(seconds: int) -> str:
+    seconds = int(seconds or 0)
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f'{h}:{m:02d}:{s:02d}'
+    return f'{m}:{s:02d}'
+
+
+def _fmt_pub_date(raw: str) -> str:
+    """RSS pubDate ('Tue, 21 Jul 2026 07:00:00 +0000') → 'dd/mm/aaaa', o
+    el texto tal cual si no matchea el formato esperado."""
+    import email.utils as _eu
+    try:
+        dt = _eu.parsedate_to_datetime(raw)
+        return dt.strftime('%d/%m/%Y')
+    except Exception:
+        return raw[:16]
+
+
 # ── Station row widget ─────────────────────────────────────────────────────────
 
 class StationRow(Gtk.ListBoxRow):
@@ -223,6 +296,109 @@ class StationRow(Gtk.ListBoxRow):
 
     def set_favorite(self, is_fav: bool):
         self._fav_btn.set_icon_name('m3-star-symbolic' if is_fav else 'm3-star-outline-symbolic')
+
+    def set_logo_bytes(self, data: bytes):
+        self.logo_bytes = data
+        pb = _pixbuf_from_bytes(data, 40)
+        if pb:
+            GLib.idle_add(self._logo.set_from_pixbuf, pb)
+
+
+# ── Podcast episode row widget ──────────────────────────────────────────────────
+
+class EpisodeRow(Gtk.ListBoxRow):
+    """Fila de episodio de podcast: portada, título/fecha+duración, estado
+    de escuchado (atenuado) y botón de descarga con 3 estados. El play se
+    dispara por 'row-activated' del ListBox contenedor, igual que
+    StationRow."""
+
+    def __init__(self, episode: dict, state: dict, on_download=None, on_remove_download=None):
+        super().__init__()
+        self.episode = episode
+        self.logo_bytes = None
+        self.set_margin_top(2)
+        self.set_margin_bottom(2)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        box.set_margin_start(8)
+        box.set_margin_end(8)
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        self.set_child(box)
+
+        self._logo = Gtk.Image()
+        self._logo.set_pixel_size(40)
+        self._logo.set_size_request(40, 40)
+        self._logo.set_from_icon_name('m3-podcasts-symbolic')
+        box.append(self._logo)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        vbox.set_hexpand(True)
+        vbox.set_overflow(Gtk.Overflow.HIDDEN)
+        box.append(vbox)
+
+        self._name_label = Gtk.Label(label=episode.get('title', ''))
+        self._name_label.set_xalign(0)
+        self._name_label.add_css_class('body')
+        self._name_label.set_ellipsize(Pango.EllipsizeMode.END)
+        self._name_label.set_max_width_chars(40)
+        vbox.append(self._name_label)
+
+        meta = _fmt_pub_date(episode.get('pub_date', ''))
+        dur = episode.get('duration_sec', 0)
+        if dur:
+            meta = f'{meta} · {_fmt_duration_short(dur)}'
+        self._sub_label = Gtk.Label(label=meta)
+        self._sub_label.set_xalign(0)
+        self._sub_label.add_css_class('caption')
+        self._sub_label.add_css_class('dim-label')
+        self._sub_label.set_ellipsize(Pango.EllipsizeMode.END)
+        vbox.append(self._sub_label)
+
+        self._dl_btn = Gtk.Button()
+        self._dl_btn.add_css_class('flat')
+        self._dl_btn.add_css_class('circular')
+        self._dl_btn.set_valign(Gtk.Align.CENTER)
+        self._on_download = on_download
+        self._on_remove_download = on_remove_download
+        self._dl_btn.connect('clicked', self._on_dl_btn_clicked)
+        box.append(self._dl_btn)
+
+        self.set_listened(bool(state.get('listened')))
+        self.set_download_state(
+            'done' if state.get('downloaded_path') else 'none')
+
+    def _on_dl_btn_clicked(self, btn):
+        if self._dl_state == 'done':
+            if self._on_remove_download:
+                self._on_remove_download(self)
+        elif self._dl_state == 'none':
+            if self._on_download:
+                self._on_download(self)
+        # 'downloading' → sin acción, el botón está deshabilitado
+
+    def set_listened(self, listened: bool):
+        self.listened = listened
+        if listened:
+            self._name_label.add_css_class('dim-label')
+        else:
+            self._name_label.remove_css_class('dim-label')
+
+    def set_download_state(self, state: str):
+        """state: 'none' | 'downloading' | 'done'."""
+        self._dl_state = state
+        if state == 'downloading':
+            self._dl_btn.set_icon_name('m3-sync-symbolic')
+            self._dl_btn.set_tooltip_text('Descargando…')
+            self._dl_btn.set_sensitive(False)
+        elif state == 'done':
+            self._dl_btn.set_icon_name('m3-download-done-symbolic')
+            self._dl_btn.set_tooltip_text('Descargado — pulsa para eliminar')
+            self._dl_btn.set_sensitive(True)
+        else:
+            self._dl_btn.set_icon_name('m3-download-symbolic')
+            self._dl_btn.set_tooltip_text('Descargar para escuchar sin conexión')
+            self._dl_btn.set_sensitive(True)
 
     def set_logo_bytes(self, data: bytes):
         self.logo_bytes = data
@@ -951,7 +1127,7 @@ class SpectrumVisualizer(Gtk.Overlay):
 class RadioWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
-        self.set_title('RadioES')
+        self.set_title('ÆRx Player')
         self.set_default_size(960, 640)
         self.set_size_request(480, 500)
 
@@ -965,6 +1141,16 @@ class RadioWindow(Adw.ApplicationWindow):
 
         self._current_station     = None
         self._current_file        = None
+        self._current_episode     = None
+        self._podcasts_data       = _load_podcasts_data()
+        self._current_podcast_show = None
+        self._podcast_search      = None
+        self._podcast_shows_stack = None
+        self._podcast_sub_list    = None
+        self._podcast_results_list = None
+        self._podcast_episode_list = None
+        self._podcast_show_title_label = None
+        self._podcast_progress_save_timer = None
         self._station_rows: dict[str, StationRow] = {}
         self._position_timer      = None
         self._is_radio            = True
@@ -976,10 +1162,32 @@ class RadioWindow(Adw.ApplicationWindow):
         self._mode_btn            = None
         self._genre_headers: dict[str, GenreHeaderRow] = {}
         self._collapsed_genres: set[str] = set()
+        self._nav_rows: dict[str, Gtk.ListBoxRow] = {}
+        self._nav_list_bottom     = None
+        self._update_check_btn    = None
+        self._notif_check_btn     = None
+        self._section_stack       = None
+        self._sidebar_stack       = None
+        self._section_title_label = None
+        self._content_stack       = None
+        self._home_flowbox        = None
+        self._favorites_list      = None
+        self._favorites_search    = None
+        self._explore_list        = None
+        self._explore_search      = None
+        self._explore_status      = None
+        self._explore_stack       = None
+        self._header_search       = None
         self._sleep_timer_id      = None
         self._sleep_remaining     = 0
         self._current_cover_data  = None
         self._cover_fullscreen_active = False
+
+        self._config       = _load_config()
+        self._theme_mode   = self._config.get('theme_mode', 'system')
+        Adw.StyleManager.get_default().set_color_scheme(
+            self._THEME_SCHEME_MAP.get(self._theme_mode, Adw.ColorScheme.DEFAULT)
+        )
 
         self._install_material_icons()
         self._install_cover_bg_css()
@@ -988,10 +1196,10 @@ class RadioWindow(Adw.ApplicationWindow):
         self._mp3_sort_mode       = 'filename'
         self._mp3_sort_btn        = None
         self._muted               = False
-        self._pre_mute_vol        = 0.8
+        self._last_nonzero_vol    = 0.8
+        self._vol_btn              = None
         self._last_notified_title = ''
 
-        self._config       = _load_config()
         self._favorites: set[str] = set(self._config.get('favorites', []))
         self._music_folder = self._config.get(
             'music_folder', str(Path.home() / 'musica')
@@ -999,6 +1207,8 @@ class RadioWindow(Adw.ApplicationWindow):
         self._check_updates_on_startup = self._config.get('check_updates_on_startup', True)
         self._desktop_notifications    = self._config.get('desktop_notifications', True)
         self._saved_volume  = self._config.get('volume', 0.8)
+        if self._saved_volume > 0.0001:
+            self._last_nonzero_vol = self._saved_volume
         self._play_mode     = self._config.get('play_mode', 'sequential')
         self._volume_save_timer = None
         self._player.set_volume(self._saved_volume)
@@ -1089,38 +1299,36 @@ class RadioWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         header.add_css_class('flat')
 
-        self._view_stack = Adw.ViewStack()
-        switcher = Adw.ViewSwitcher()
-        switcher.set_stack(self._view_stack)
-        switcher.set_policy(Adw.ViewSwitcherPolicy.WIDE)
-        header.set_title_widget(switcher)
-        self._view_stack.connect('notify::visible-child', self._on_tab_switched)
-
         if _HAS_OVERLAY_SPLIT:
             self._sidebar_btn = Gtk.ToggleButton()
-            self._sidebar_btn.set_icon_name('m3-dock-left-symbolic')
+            self._sidebar_btn.add_css_class('flat')
             self._sidebar_btn.set_tooltip_text('Mostrar/ocultar panel lateral')
             self._sidebar_btn.set_active(True)
+
+            logo_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            logo_icon = Gtk.Image.new_from_file(str(DATA_DIR / 'icons' / 'aerx-mark.svg'))
+            logo_icon.set_pixel_size(28)
+            logo_box.append(logo_icon)
+            logo_label = Gtk.Label(label='ÆRx')
+            logo_label.add_css_class('heading')
+            logo_box.append(logo_label)
+            self._sidebar_btn.set_child(logo_box)
+
             header.pack_start(self._sidebar_btn)
 
-        about_btn = Gtk.Button()
-        about_btn.set_icon_name('m3-info-symbolic')
-        about_btn.set_tooltip_text('Acerca de RadioES')
-        about_btn.add_css_class('flat')
-        about_btn.connect('clicked', self._on_about)
-        header.pack_end(about_btn)
+        # Ajustes y Acerca de viven ahora en el rail de navegación (parte
+        # baja del menú), no en la cabecera.
 
-        prefs_btn = Gtk.Button()
-        prefs_btn.set_icon_name('m3-settings-symbolic')
-        prefs_btn.set_tooltip_text('Preferencias')
-        prefs_btn.add_css_class('flat')
-        prefs_btn.connect('clicked', self._on_preferences)
-        header.pack_end(prefs_btn)
+        self._header_search = Gtk.SearchEntry()
+        self._header_search.set_placeholder_text('Buscar emisoras, géneros o podcasts…')
+        self._header_search.set_hexpand(False)
+        self._header_search.set_size_request(360, -1)
+        self._header_search.connect('activate', self._on_header_search)
+        header.set_title_widget(self._header_search)
 
         root.add_top_bar(header)
 
-        self._build_radio_page()
-        self._build_mp3_page()
+        nav_rail = self._build_nav_rail()
 
         now_playing = self._build_now_playing()
         now_playing.add_css_class('now-playing-translucent')
@@ -1139,10 +1347,18 @@ class RadioWindow(Adw.ApplicationWindow):
         content_overlay.add_overlay(self._cover_dim_layer)
         content_overlay.add_overlay(now_playing)
 
+        # Content slot: swaps between the Home dashboard, the shared
+        # now-playing panel (used by Radio/Local Music/Favorites) and Explore.
+        self._content_stack = Adw.ViewStack()
+        self._content_stack.add_named(self._build_home_page(), 'home')
+        self._content_stack.add_named(content_overlay, 'player')
+        self._content_stack.add_named(self._build_explore_page(), 'explore')
+        self._content_stack.add_named(self._build_settings_page(), 'settings')
+
         if _HAS_OVERLAY_SPLIT:
             self._split_view = Adw.OverlaySplitView()
-            self._split_view.set_sidebar(self._view_stack)
-            self._split_view.set_content(content_overlay)
+            self._split_view.set_sidebar(nav_rail)
+            self._split_view.set_content(self._content_stack)
             self._split_view.set_sidebar_width_fraction(0.38)
             self._split_view.set_min_sidebar_width(260)
             self._split_view.set_max_sidebar_width(440)
@@ -1166,8 +1382,8 @@ class RadioWindow(Adw.ApplicationWindow):
             paned.set_position(340)
             paned.set_shrink_start_child(False)
             paned.set_shrink_end_child(False)
-            paned.set_start_child(self._view_stack)
-            paned.set_end_child(content_overlay)
+            paned.set_start_child(nav_rail)
+            paned.set_end_child(self._content_stack)
             split_container = paned
 
         controls = self._build_controls()
@@ -1180,9 +1396,971 @@ class RadioWindow(Adw.ApplicationWindow):
         self._toast_overlay.set_child(content_box)
         root.set_content(self._toast_overlay)
 
+        self._nav_list.select_row(self._nav_rows['home'])
+
         key_ctrl = Gtk.EventControllerKey()
         key_ctrl.connect('key-pressed', self._on_key_pressed)
         self.add_controller(key_ctrl)
+
+    _NAV_LABELS = {
+        'radio': 'Radio', 'local': 'Música local', 'favorites': 'Favoritos',
+        'podcasts': 'Podcasts',
+    }
+
+    _THEME_SCHEME_MAP = {
+        'system': Adw.ColorScheme.DEFAULT,
+        'light':  Adw.ColorScheme.FORCE_LIGHT,
+        'dark':   Adw.ColorScheme.FORCE_DARK,
+    }
+
+    def _build_nav_rail(self) -> Gtk.Widget:
+        """Left column, drill-down style: shows either the section MENU
+        (logo + 5 nav rows) or, for sections with a list (Radio/Local
+        Music/Favorites), that section's LIST with a back arrow to return
+        to the menu — never both at once. Home/Explore have no list of
+        their own, so selecting them always keeps the menu visible."""
+        self._sidebar_stack = Gtk.Stack()
+        self._sidebar_stack.set_vexpand(True)
+
+        # ── "menu" page: section navigation (logo now lives in the
+        # headerbar, replacing the old plain toggle icon) ──
+        menu_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        menu_box.set_margin_top(8)
+
+        self._nav_list = Gtk.ListBox()
+        self._nav_list.add_css_class('navigation-sidebar')
+        self._nav_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+
+        for nav_id, icon_name, label_text in (
+            ('home',      'm3-home-symbolic',          'Inicio'),
+            ('radio',     'm3-radio-symbolic',         'Radio'),
+            ('local',     'm3-library-music-symbolic', 'Música local'),
+            ('favorites', 'm3-star-symbolic',           'Favoritos'),
+            ('podcasts',  'm3-podcasts-symbolic',       'Podcasts'),
+            ('explore',   'm3-explore-symbolic',        'Explorar'),
+        ):
+            row = Gtk.ListBoxRow()
+            row.nav_id = nav_id
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            row_box.set_margin_start(12); row_box.set_margin_end(12)
+            row_box.set_margin_top(9);    row_box.set_margin_bottom(9)
+            row_box.append(Gtk.Image.new_from_icon_name(icon_name))
+            label = Gtk.Label(label=label_text)
+            label.set_xalign(0)
+            row_box.append(label)
+            row.set_child(row_box)
+            self._nav_list.append(row)
+            self._nav_rows[nav_id] = row
+
+        # 'row-selected' covers programmatic self._nav_list.select_row(...)
+        # (Home cards, Explore add, etc.); 'row-activated' additionally
+        # covers the user re-clicking the row that's already selected —
+        # select_row() alone wouldn't re-emit 'row-selected' for that case,
+        # which would leave the rail stuck on the list page with no way
+        # back in short of the back arrow.
+        self._nav_list.connect('row-selected', self._on_nav_selected)
+        self._nav_list.connect('row-activated', self._on_nav_selected)
+        menu_box.append(self._nav_list)
+
+        # Spacer pushes Ajustes/Acerca de to the bottom of the menu.
+        spacer = Gtk.Box()
+        spacer.set_vexpand(True)
+        menu_box.append(spacer)
+
+        self._nav_list_bottom = Gtk.ListBox()
+        self._nav_list_bottom.add_css_class('navigation-sidebar')
+        self._nav_list_bottom.set_selection_mode(Gtk.SelectionMode.SINGLE)
+
+        for nav_id, icon_name, label_text, selectable in (
+            ('settings', 'm3-settings-symbolic', 'Ajustes', True),
+            # "Acerca de" abre un modal — no es un destino de navegación,
+            # así que no debe quedar marcado como sección activa.
+            ('about',    'm3-info-symbolic',     'Acerca de', False),
+        ):
+            row = Gtk.ListBoxRow()
+            row.nav_id = nav_id
+            row.set_selectable(selectable)
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            row_box.set_margin_start(12); row_box.set_margin_end(12)
+            row_box.set_margin_top(9);    row_box.set_margin_bottom(9)
+            row_box.append(Gtk.Image.new_from_icon_name(icon_name))
+            label = Gtk.Label(label=label_text)
+            label.set_xalign(0)
+            row_box.append(label)
+            row.set_child(row_box)
+            self._nav_list_bottom.append(row)
+            self._nav_rows[nav_id] = row
+
+        self._nav_list_bottom.connect('row-selected', self._on_nav_selected)
+        self._nav_list_bottom.connect('row-activated', self._on_nav_selected)
+        menu_box.append(self._nav_list_bottom)
+
+        # ── "list" page: back arrow + section title + that section's list ──
+        list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        back_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        back_row.set_margin_start(4); back_row.set_margin_end(12)
+        back_row.set_margin_top(8);   back_row.set_margin_bottom(8)
+        back_btn = Gtk.Button()
+        back_btn.set_icon_name('m3-arrow-back-symbolic')
+        back_btn.set_tooltip_text('Volver al menú')
+        back_btn.add_css_class('flat')
+        back_btn.add_css_class('circular')
+        back_btn.connect('clicked', self._on_nav_back)
+        back_row.append(back_btn)
+        self._section_title_label = Gtk.Label()
+        self._section_title_label.add_css_class('title-2')
+        self._section_title_label.set_xalign(0)
+        back_row.append(self._section_title_label)
+        list_box.append(back_row)
+        list_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+
+        self._section_stack = Adw.ViewStack()
+        self._section_stack.set_vexpand(True)
+        self._section_stack.add_named(self._build_radio_page(), 'radio')
+        self._section_stack.add_named(self._build_mp3_page(), 'local')
+        self._section_stack.add_named(self._build_favorites_page(), 'favorites')
+        self._section_stack.add_named(self._build_podcasts_page(), 'podcasts')
+        list_box.append(self._section_stack)
+
+        self._sidebar_stack.add_named(menu_box, 'menu')
+        self._sidebar_stack.add_named(list_box, 'list')
+        return self._sidebar_stack
+
+    def _on_nav_back(self, _btn):
+        self._sidebar_stack.set_visible_child_name('menu')
+
+    def _on_nav_selected(self, listbox, row):
+        if row is None:
+            return
+        nav_id = row.nav_id
+
+        if nav_id == 'about':
+            self._on_about(None)
+            return
+
+        # The two nav lists (main + bottom) each keep their own selection
+        # state — clear the other one so only one pill is ever lit.
+        other = self._nav_list_bottom if listbox is self._nav_list else self._nav_list
+        other.unselect_all()
+
+        content_page = {
+            'home': 'home', 'radio': 'player', 'local': 'player',
+            'favorites': 'player', 'podcasts': 'player',
+            'explore': 'explore', 'settings': 'settings',
+        }[nav_id]
+        self._content_stack.set_visible_child_name(content_page)
+
+        has_list = nav_id in self._NAV_LABELS
+        if has_list:
+            self._section_stack.set_visible_child_name(nav_id)
+            self._section_title_label.set_label(self._NAV_LABELS[nav_id])
+            self._sidebar_stack.set_visible_child_name('list')
+        else:
+            self._sidebar_stack.set_visible_child_name('menu')
+
+        if self._mode_btn is not None:
+            self._mode_btn.set_visible(nav_id == 'local')
+
+    def _build_home_page(self) -> Gtk.Widget:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        box.set_margin_start(24); box.set_margin_end(24)
+        box.set_margin_top(20);   box.set_margin_bottom(16)
+
+        # Hero: banner degradado (torre de radio + cordillera, motivo de la
+        # guía de marca) con el saludo superpuesto — como en el mockup,
+        # en vez de un simple texto suelto sobre el fondo de la app.
+        hero = Gtk.Overlay()
+        hero.add_css_class('card')
+        hero.set_overflow(Gtk.Overflow.HIDDEN)
+        hero.set_size_request(-1, 160)
+        hero.set_margin_bottom(16)
+
+        hero_pic = Gtk.Picture.new_for_filename(str(DATA_DIR / 'hero-banner.png'))
+        hero_pic.set_content_fit(Gtk.ContentFit.COVER)
+        hero_pic.set_can_shrink(True)
+        # Sin esto, Picture se dimensiona según su propio aspecto (más alto
+        # que los 160px del hero) en vez de rellenar la caja entera, y
+        # content_fit=COVER nunca llega a recortar — se veía el fondo del
+        # .card asomando por arriba/abajo de la imagen.
+        hero_pic.set_hexpand(True)
+        hero_pic.set_vexpand(True)
+        hero.set_child(hero_pic)
+
+        # Logo arriba a la izquierda, alineado con el texto de abajo (mismo
+        # margen izquierdo) para que ambos lean como una sola columna.
+        hero_logo = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        hero_logo.set_valign(Gtk.Align.START)
+        hero_logo.set_halign(Gtk.Align.START)
+        hero_logo.set_margin_start(20); hero_logo.set_margin_top(16)
+
+        hero_logo_icon = Gtk.Image.new_from_file(str(DATA_DIR / 'icons' / 'aerx-mark.svg'))
+        hero_logo_icon.set_pixel_size(51)
+        hero_logo.append(hero_logo_icon)
+
+        hero_logo_label = Gtk.Label(label='ÆRx')
+        hero_logo_label.add_css_class('m3-hero-logo-text')
+        hero_logo_label.add_css_class('m3-hero-title')
+        hero_logo.append(hero_logo_label)
+
+        hero.add_overlay(hero_logo)
+
+        hero_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        hero_text.set_valign(Gtk.Align.END)
+        hero_text.set_halign(Gtk.Align.START)
+        hero_text.set_margin_start(20); hero_text.set_margin_bottom(16)
+
+        greeting = Gtk.Label(label='Buenas escuchas')
+        greeting.add_css_class('title-1')
+        greeting.add_css_class('m3-hero-title')
+        greeting.set_xalign(0)
+        hero_text.append(greeting)
+
+        subtitle = Gtk.Label(label='Radio y Audio, sin fronteras.')
+        subtitle.add_css_class('body')
+        subtitle.add_css_class('m3-hero-subtitle')
+        subtitle.set_xalign(0)
+        hero_text.append(subtitle)
+
+        hero.add_overlay(hero_text)
+        box.append(hero)
+
+        section_lbl = Gtk.Label(label='Emisoras destacadas')
+        section_lbl.add_css_class('heading')
+        section_lbl.set_xalign(0)
+        section_lbl.set_margin_bottom(8)
+        box.append(section_lbl)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
+
+        self._home_flowbox = Gtk.FlowBox()
+        self._home_flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        self._home_flowbox.set_homogeneous(True)
+        self._home_flowbox.set_row_spacing(12)
+        self._home_flowbox.set_column_spacing(12)
+        self._home_flowbox.set_max_children_per_line(6)
+        self._home_flowbox.set_valign(Gtk.Align.START)
+        scroll.set_child(self._home_flowbox)
+        box.append(scroll)
+
+        return box
+
+    _CARD_ART_PALETTE = (
+        'm3-card-art-1', 'm3-card-art-2', 'm3-card-art-3',
+        'm3-card-art-4', 'm3-card-art-5', 'm3-card-art-6',
+    )
+
+    def _build_station_card(self, station: dict) -> Gtk.Widget:
+        """M3 '.card' tile for the Home grid, styled after the ÆRx brand
+        mockup: a full-bleed colour block (deterministic per station) fills
+        the top of the tile with the station logo centered on it; name +
+        genre sit below as a left-aligned caption on the card surface. One
+        tile that reads as art + caption, not an icon and a text pill
+        stacked as separate stickers."""
+        card = Gtk.Button()
+        card.add_css_class('flat')
+        card.set_tooltip_text(station.get('name', ''))
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        outer.add_css_class('card')
+        outer.set_overflow(Gtk.Overflow.HIDDEN)
+        outer.set_size_request(140, -1)
+
+        name = station.get('name', '')
+        palette = self._CARD_ART_PALETTE[
+            zlib.crc32(name.encode('utf-8')) % len(self._CARD_ART_PALETTE)
+        ]
+        art = Gtk.Box(halign=Gtk.Align.FILL, valign=Gtk.Align.FILL)
+        art.set_hexpand(True)
+        art.add_css_class('m3-card-art')
+        art.add_css_class(palette)
+        art.set_size_request(-1, 96)
+
+        img = Gtk.Image.new_from_icon_name('m3-radio-symbolic')
+        img.set_pixel_size(40)
+        img.set_halign(Gtk.Align.CENTER)
+        img.set_valign(Gtk.Align.CENTER)
+        img.set_hexpand(True)
+        img.set_vexpand(True)
+        art.append(img)
+        outer.append(art)
+
+        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        text_box.set_margin_top(8); text_box.set_margin_bottom(10)
+        text_box.set_margin_start(10); text_box.set_margin_end(10)
+
+        name_label = Gtk.Label(label=name)
+        name_label.add_css_class('body')
+        name_label.set_ellipsize(Pango.EllipsizeMode.END)
+        name_label.set_max_width_chars(15)
+        name_label.set_xalign(0)
+        text_box.append(name_label)
+
+        genre = station.get('genre', '')
+        if isinstance(genre, list):
+            genre = ', '.join(genre[:1])
+        genre_label = Gtk.Label(label=str(genre)[:20] if genre else '​')
+        genre_label.add_css_class('caption')
+        genre_label.add_css_class('dim-label')
+        genre_label.set_ellipsize(Pango.EllipsizeMode.END)
+        genre_label.set_max_width_chars(18)
+        genre_label.set_xalign(0)
+        text_box.append(genre_label)
+
+        outer.append(text_box)
+
+        card.set_child(outer)
+        card.connect('clicked', lambda _b, s=station: self._on_home_card_clicked(s))
+
+        favicon = station.get('favicon') or station.get('favicon_url', '')
+        if favicon and favicon.startswith('http'):
+            radio_browser.fetch_image(
+                favicon,
+                lambda data, err, im=img: self._set_card_logo(im, data),
+            )
+        return card
+
+    def _set_card_logo(self, img: Gtk.Image, data: bytes):
+        if not data:
+            return
+        pb = _pixbuf_from_bytes(data, 64)
+        if pb:
+            GLib.idle_add(img.set_from_pixbuf, pb)
+
+    def _on_home_card_clicked(self, station: dict):
+        row = self._station_rows.get(station.get('url', ''))
+        if row:
+            self._nav_list.select_row(self._nav_rows['radio'])
+            self._on_station_activated(self._radio_list, row)
+
+    def _refresh_home_cards(self):
+        if self._home_flowbox is None:
+            return
+        while child := self._home_flowbox.get_first_child():
+            self._home_flowbox.remove(child)
+        stations = [
+            self._station_rows[u].station for u in self._favorites
+            if u in self._station_rows
+        ]
+        if not stations:
+            stations = [row.station for row in list(self._station_rows.values())[:12]]
+        for station in stations:
+            self._home_flowbox.append(self._build_station_card(station))
+
+    def _build_favorites_page(self) -> Gtk.Widget:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        search_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        search_bar.set_margin_start(8); search_bar.set_margin_end(8)
+        search_bar.set_margin_top(8);   search_bar.set_margin_bottom(4)
+
+        self._favorites_search = Gtk.SearchEntry()
+        self._favorites_search.set_placeholder_text('Buscar en favoritos…')
+        self._favorites_search.set_hexpand(True)
+        self._favorites_search.connect(
+            'search-changed', lambda _w: self._favorites_list.invalidate_filter()
+        )
+        search_bar.append(self._favorites_search)
+        box.append(search_bar)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
+
+        self._favorites_list = Gtk.ListBox()
+        self._favorites_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self._favorites_list.add_css_class('boxed-list')
+        self._favorites_list.set_margin_start(8)
+        self._favorites_list.set_margin_end(8)
+        self._favorites_list.set_margin_bottom(8)
+        self._favorites_list.connect('row-activated', self._on_favorites_row_activated)
+        self._favorites_list.set_filter_func(self._favorites_filter_func)
+        scroll.set_child(self._favorites_list)
+        box.append(scroll)
+
+        return box
+
+    def _favorites_filter_func(self, row):
+        query = self._favorites_search.get_text().lower().strip()
+        if not query:
+            return True
+        name  = row.station.get('name', '').lower()
+        genre = str(row.station.get('genre', '')).lower()
+        return query in name or query in genre
+
+    def _on_favorites_row_activated(self, _listbox, row):
+        if not isinstance(row, StationRow):
+            return
+        real_row = self._station_rows.get(row.station.get('url', ''))
+        if real_row:
+            self._on_station_activated(self._radio_list, real_row)
+
+    def _refresh_favorites_page(self):
+        if self._favorites_list is None:
+            return
+        while child := self._favorites_list.get_first_child():
+            self._favorites_list.remove(child)
+        for url in self._favorites:
+            src = self._station_rows.get(url)
+            if not src:
+                continue
+            row = StationRow(src.station, is_favorite=True, on_toggle_fav=self._toggle_favorite)
+            if src.logo_bytes:
+                row.set_logo_bytes(src.logo_bytes)
+            else:
+                favicon = src.station.get('favicon') or src.station.get('favicon_url', '')
+                if favicon and favicon.startswith('http'):
+                    radio_browser.fetch_image(
+                        favicon,
+                        lambda data, err, r=row: r.set_logo_bytes(data) if data else None,
+                    )
+            self._favorites_list.append(row)
+
+    def _on_favorites_changed(self):
+        """Call after self._favorites is mutated, from wherever a star was
+        toggled (main list, Explore, Home cards), to keep Home and the
+        Favorites page in sync."""
+        self._refresh_home_cards()
+        self._refresh_favorites_page()
+
+    # ── Podcasts ─────────────────────────────────────────────────────────────
+
+    def _build_podcasts_page(self) -> Gtk.Widget:
+        """Drill-down propio de 2 niveles dentro de la sección: 'shows'
+        (buscar/suscripciones) ↔ 'episodes' (lista de un show abierto),
+        sin tocar el back-arrow del rail exterior (ese siempre vuelve al
+        menú principal; el de aquí vuelve de episodios a shows)."""
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        self._podcast_stack = Gtk.Stack()
+        self._podcast_stack.set_vexpand(True)
+
+        # ── página "shows": buscador + suscripciones/resultados ──
+        shows_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        search_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        search_bar.set_margin_start(8); search_bar.set_margin_end(8)
+        search_bar.set_margin_top(8);   search_bar.set_margin_bottom(4)
+        self._podcast_search = Gtk.SearchEntry()
+        self._podcast_search.set_placeholder_text('Buscar podcasts…')
+        self._podcast_search.set_hexpand(True)
+        self._podcast_search.connect('activate', self._on_podcast_search)
+        self._podcast_search.connect('search-changed', self._on_podcast_search_changed)
+        search_bar.append(self._podcast_search)
+        shows_page.append(search_bar)
+
+        self._podcast_shows_stack = Gtk.Stack()
+        self._podcast_shows_stack.set_vexpand(True)
+
+        sub_scroll = Gtk.ScrolledWindow()
+        sub_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sub_scroll.set_vexpand(True)
+        self._podcast_sub_list = Gtk.ListBox()
+        self._podcast_sub_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self._podcast_sub_list.add_css_class('boxed-list')
+        self._podcast_sub_list.set_margin_start(8)
+        self._podcast_sub_list.set_margin_end(8)
+        self._podcast_sub_list.set_margin_bottom(8)
+        self._podcast_sub_list.connect('row-activated', self._on_podcast_show_row_activated)
+        sub_scroll.set_child(self._podcast_sub_list)
+        self._podcast_shows_stack.add_named(sub_scroll, 'subscriptions')
+
+        res_scroll = Gtk.ScrolledWindow()
+        res_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        res_scroll.set_vexpand(True)
+        self._podcast_results_list = Gtk.ListBox()
+        self._podcast_results_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self._podcast_results_list.add_css_class('boxed-list')
+        self._podcast_results_list.set_margin_start(8)
+        self._podcast_results_list.set_margin_end(8)
+        self._podcast_results_list.set_margin_bottom(8)
+        self._podcast_results_list.connect('row-activated', self._on_podcast_show_row_activated)
+        res_scroll.set_child(self._podcast_results_list)
+        self._podcast_shows_stack.add_named(res_scroll, 'results')
+
+        shows_page.append(self._podcast_shows_stack)
+        self._podcast_stack.add_named(shows_page, 'shows')
+
+        # ── página "episodes": atrás + título + lista de episodios ──
+        episodes_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        ep_back_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        ep_back_row.set_margin_start(4); ep_back_row.set_margin_end(12)
+        ep_back_row.set_margin_top(8);   ep_back_row.set_margin_bottom(4)
+        ep_back_btn = Gtk.Button()
+        ep_back_btn.set_icon_name('m3-arrow-back-symbolic')
+        ep_back_btn.set_tooltip_text('Volver a Podcasts')
+        ep_back_btn.add_css_class('flat')
+        ep_back_btn.add_css_class('circular')
+        ep_back_btn.connect('clicked', self._on_podcast_shows_back)
+        ep_back_row.append(ep_back_btn)
+        self._podcast_show_title_label = Gtk.Label()
+        self._podcast_show_title_label.add_css_class('heading')
+        self._podcast_show_title_label.set_xalign(0)
+        self._podcast_show_title_label.set_ellipsize(Pango.EllipsizeMode.END)
+        ep_back_row.append(self._podcast_show_title_label)
+        episodes_page.append(ep_back_row)
+
+        ep_scroll = Gtk.ScrolledWindow()
+        ep_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        ep_scroll.set_vexpand(True)
+        self._podcast_episode_list = Gtk.ListBox()
+        self._podcast_episode_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self._podcast_episode_list.add_css_class('boxed-list')
+        self._podcast_episode_list.set_margin_start(8)
+        self._podcast_episode_list.set_margin_end(8)
+        self._podcast_episode_list.set_margin_bottom(8)
+        self._podcast_episode_list.connect('row-activated', self._on_episode_activated)
+        ep_scroll.set_child(self._podcast_episode_list)
+        episodes_page.append(ep_scroll)
+
+        self._podcast_stack.add_named(episodes_page, 'episodes')
+
+        outer.append(self._podcast_stack)
+        self._refresh_podcast_subscriptions()
+        return outer
+
+    def _set_generic_logo(self, img: Gtk.Image, data: bytes):
+        if not data:
+            return
+        pb = _pixbuf_from_bytes(data, 40)
+        if pb:
+            GLib.idle_add(img.set_from_pixbuf, pb)
+
+    def _build_podcast_show_row(self, show: dict, subscribed: bool) -> Gtk.ListBoxRow:
+        row = Gtk.ListBoxRow()
+        row.show_meta = show
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        box.set_margin_start(8); box.set_margin_end(8)
+        box.set_margin_top(6);   box.set_margin_bottom(6)
+        row.set_child(box)
+
+        logo = Gtk.Image()
+        logo.set_pixel_size(40)
+        logo.set_size_request(40, 40)
+        logo.set_from_icon_name('m3-podcasts-symbolic')
+        box.append(logo)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        vbox.set_hexpand(True)
+        vbox.set_overflow(Gtk.Overflow.HIDDEN)
+        box.append(vbox)
+
+        name_label = Gtk.Label(label=show.get('name', ''))
+        name_label.set_xalign(0)
+        name_label.add_css_class('body')
+        name_label.set_ellipsize(Pango.EllipsizeMode.END)
+        vbox.append(name_label)
+
+        artist_label = Gtk.Label(label=show.get('artist', ''))
+        artist_label.set_xalign(0)
+        artist_label.add_css_class('caption')
+        artist_label.add_css_class('dim-label')
+        artist_label.set_ellipsize(Pango.EllipsizeMode.END)
+        vbox.append(artist_label)
+
+        sub_btn = Gtk.Button()
+        sub_btn.set_icon_name('m3-star-symbolic' if subscribed else 'm3-star-outline-symbolic')
+        sub_btn.set_tooltip_text('Cancelar suscripción' if subscribed else 'Suscribirse')
+        sub_btn.add_css_class('flat')
+        sub_btn.add_css_class('circular')
+        sub_btn.set_valign(Gtk.Align.CENTER)
+        sub_btn.connect('clicked', lambda b, s=show: self._on_podcast_subscribe_toggle(s, b))
+        box.append(sub_btn)
+
+        artwork = show.get('artwork_url', '')
+        if artwork and artwork.startswith('http'):
+            radio_browser.fetch_image(
+                artwork, lambda data, err, im=logo: self._set_generic_logo(im, data))
+
+        return row
+
+    def _refresh_podcast_subscriptions(self):
+        if self._podcast_sub_list is None:
+            return
+        while child := self._podcast_sub_list.get_first_child():
+            self._podcast_sub_list.remove(child)
+        subs = self._podcasts_data.get('subscriptions', [])
+        if not subs:
+            placeholder = Gtk.ListBoxRow()
+            placeholder.set_selectable(False)
+            placeholder.set_activatable(False)
+            lbl = Gtk.Label(label='Aún no sigues ningún podcast. Búscalos arriba.')
+            lbl.add_css_class('dim-label')
+            lbl.set_wrap(True)
+            lbl.set_margin_top(24); lbl.set_margin_bottom(24)
+            lbl.set_margin_start(12); lbl.set_margin_end(12)
+            placeholder.set_child(lbl)
+            self._podcast_sub_list.append(placeholder)
+            return
+        for sub in subs:
+            self._podcast_sub_list.append(self._build_podcast_show_row(sub, subscribed=True))
+
+    def _is_podcast_subscribed(self, feed_url: str) -> bool:
+        return any(s.get('feed_url') == feed_url
+                   for s in self._podcasts_data.get('subscriptions', []))
+
+    def _on_podcast_subscribe_toggle(self, show: dict, btn: Gtk.Button):
+        feed_url = show.get('feed_url', '')
+        subs = self._podcasts_data.setdefault('subscriptions', [])
+        if self._is_podcast_subscribed(feed_url):
+            self._podcasts_data['subscriptions'] = [
+                s for s in subs if s.get('feed_url') != feed_url]
+            btn.set_icon_name('m3-star-outline-symbolic')
+            btn.set_tooltip_text('Suscribirse')
+        else:
+            subs.append({
+                'feed_url':      feed_url,
+                'name':          show.get('name', ''),
+                'artist':        show.get('artist', ''),
+                'artwork_url':   show.get('artwork_url', ''),
+                'subscribed_at': datetime.datetime.now().isoformat(),
+            })
+            btn.set_icon_name('m3-star-symbolic')
+            btn.set_tooltip_text('Cancelar suscripción')
+        threading.Thread(target=lambda: _save_podcasts_data(self._podcasts_data), daemon=True).start()
+        self._refresh_podcast_subscriptions()
+
+    def _on_podcast_search_changed(self, entry):
+        if not entry.get_text().strip():
+            self._podcast_shows_stack.set_visible_child_name('subscriptions')
+
+    def _on_podcast_search(self, entry):
+        query = entry.get_text().strip()
+        if not query:
+            self._podcast_shows_stack.set_visible_child_name('subscriptions')
+            return
+        while child := self._podcast_results_list.get_first_child():
+            self._podcast_results_list.remove(child)
+        self._podcast_shows_stack.set_visible_child_name('results')
+        podcasts.search_shows(query, self._on_podcast_search_result)
+
+    def _on_podcast_search_result(self, shows, err):
+        def _apply():
+            while child := self._podcast_results_list.get_first_child():
+                self._podcast_results_list.remove(child)
+            if err or not shows:
+                placeholder = Gtk.ListBoxRow()
+                placeholder.set_selectable(False)
+                placeholder.set_activatable(False)
+                lbl = Gtk.Label(
+                    label=f'Error al buscar: {err}' if err else 'Sin resultados.')
+                lbl.add_css_class('dim-label')
+                lbl.set_wrap(True)
+                lbl.set_margin_top(24); lbl.set_margin_bottom(24)
+                lbl.set_margin_start(12); lbl.set_margin_end(12)
+                placeholder.set_child(lbl)
+                self._podcast_results_list.append(placeholder)
+                return
+            for show in shows:
+                subscribed = self._is_podcast_subscribed(show['feed_url'])
+                self._podcast_results_list.append(
+                    self._build_podcast_show_row(show, subscribed=subscribed))
+        GLib.idle_add(_apply)
+
+    def _on_podcast_show_row_activated(self, _listbox, row):
+        show = getattr(row, 'show_meta', None)
+        if show:
+            self._open_podcast_show(show)
+
+    def _open_podcast_show(self, show: dict):
+        self._current_podcast_show = show
+        self._podcast_show_title_label.set_label(show.get('name', ''))
+        while child := self._podcast_episode_list.get_first_child():
+            self._podcast_episode_list.remove(child)
+        loading = Gtk.ListBoxRow()
+        loading.set_selectable(False)
+        loading.set_activatable(False)
+        lbl = Gtk.Label(label='Cargando episodios…')
+        lbl.add_css_class('dim-label')
+        lbl.set_margin_top(24); lbl.set_margin_bottom(24)
+        loading.set_child(lbl)
+        self._podcast_episode_list.append(loading)
+        self._podcast_stack.set_visible_child_name('episodes')
+        podcasts.fetch_episodes(show['feed_url'], self._on_podcast_episodes_fetched)
+
+    def _on_podcast_episodes_fetched(self, result, err):
+        show_meta, episodes = result if result else (None, None)
+
+        def _apply():
+            while child := self._podcast_episode_list.get_first_child():
+                self._podcast_episode_list.remove(child)
+            if err or not episodes:
+                placeholder = Gtk.ListBoxRow()
+                placeholder.set_selectable(False)
+                placeholder.set_activatable(False)
+                lbl = Gtk.Label(
+                    label='No se pudieron cargar los episodios.' if err else 'Sin episodios.')
+                lbl.add_css_class('dim-label')
+                lbl.set_margin_top(24); lbl.set_margin_bottom(24)
+                placeholder.set_child(lbl)
+                self._podcast_episode_list.append(placeholder)
+                return
+            for ep in episodes:
+                state = self._podcasts_data.get('episodes', {}).get(ep['guid'], {})
+                row = EpisodeRow(ep, state,
+                                  on_download=self._on_episode_download_clicked,
+                                  on_remove_download=self._on_episode_remove_download_clicked)
+                artwork = ep.get('artwork_url', '')
+                if artwork and artwork.startswith('http'):
+                    radio_browser.fetch_image(
+                        artwork,
+                        lambda data, e, r=row: r.set_logo_bytes(data) if data else None,
+                    )
+                self._podcast_episode_list.append(row)
+        GLib.idle_add(_apply)
+
+    def _on_podcast_shows_back(self, _btn):
+        self._podcast_stack.set_visible_child_name('shows')
+
+    def _on_episode_download_clicked(self, row: 'EpisodeRow'):
+        ep = row.episode
+        dest = _episode_download_path(ep['guid'], ep['audio_url'])
+        PODCAST_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        row.set_download_state('downloading')
+
+        def _progress(done, total):
+            if total:
+                pct = int(done * 100 / total)
+                GLib.idle_add(row.set_tooltip_text, f'Descargando… {pct}%')
+
+        def _done(path, err):
+            def _apply():
+                if err or not path:
+                    row.set_download_state('none')
+                    self._toast_overlay.add_toast(
+                        Adw.Toast(title=f'No se pudo descargar: {err or "error desconocido"}'))
+                    return
+                entry = self._podcasts_data.setdefault('episodes', {}).setdefault(ep['guid'], {})
+                entry.update({
+                    'feed_url':       (self._current_podcast_show or {}).get('feed_url', ''),
+                    'title':          ep.get('title', ''),
+                    'pub_date':       ep.get('pub_date', ''),
+                    'audio_url':      ep.get('audio_url', ''),
+                    'duration_sec':   ep.get('duration_sec', 0),
+                    'downloaded_path': str(path),
+                })
+                entry.setdefault('listened', False)
+                entry.setdefault('position_sec', 0)
+                threading.Thread(target=lambda: _save_podcasts_data(self._podcasts_data), daemon=True).start()
+                row.set_download_state('done')
+            GLib.idle_add(_apply)
+
+        podcasts.download_episode(ep['audio_url'], str(dest), _done, progress_cb=_progress)
+
+    def _on_episode_remove_download_clicked(self, row: 'EpisodeRow'):
+        ep = row.episode
+        entry = self._podcasts_data.get('episodes', {}).get(ep['guid'])
+        if entry and entry.get('downloaded_path'):
+            Path(entry['downloaded_path']).unlink(missing_ok=True)
+            entry['downloaded_path'] = None
+            threading.Thread(target=lambda: _save_podcasts_data(self._podcasts_data), daemon=True).start()
+        row.set_download_state('none')
+
+    def _on_episode_activated(self, _listbox, row):
+        if not isinstance(row, EpisodeRow):
+            return
+        ep = row.episode
+        show = self._current_podcast_show or {}
+        state = self._podcasts_data.get('episodes', {}).get(ep['guid'], {})
+
+        self._current_track_index = -1
+        self._is_radio        = False
+        self._current_station = None
+        self._current_file    = None
+        self._current_episode = {**ep, 'show_name': show.get('name', ''), 'row': row}
+
+        self._title_label.set_text(ep.get('title', ''))
+        self._artist_label.set_text(show.get('name', ''))
+        self._album_label.set_text(_fmt_pub_date(ep.get('pub_date', '')))
+        self._set_radio_mode(False)
+
+        self._current_cover_data = None
+        self._cover_image.set_from_icon_name('m3-podcasts-symbolic')
+        self._cover_image.set_pixel_size(160)
+        self._update_cover_display_mode()
+        artwork = ep.get('artwork_url') or show.get('artwork_url', '')
+        if artwork and artwork.startswith('http'):
+            radio_browser.fetch_image(artwork, self._on_episode_cover_fetched)
+
+        downloaded = state.get('downloaded_path')
+        if downloaded and Path(downloaded).exists():
+            uri = 'file://' + urllib.parse.quote(downloaded)
+        else:
+            uri = ep['audio_url']
+        self._player.play(uri)
+
+        resume_at = state.get('position_sec', 0)
+        if resume_at and resume_at > 2 and not state.get('listened'):
+            GLib.timeout_add(800, self._seek_resume_once, int(resume_at * Gst.SECOND))
+
+        self._update_meta_chips({'Podcast': show.get('name', '')})
+
+    def _seek_resume_once(self, pos_ns):
+        self._player.seek(pos_ns)
+        return False
+
+    def _on_episode_cover_fetched(self, data, err):
+        if not data:
+            return
+        pb = _pixbuf_from_bytes(data, 160)
+        if not pb:
+            return
+        def _apply():
+            self._current_cover_data = data
+            self._cover_image.set_from_pixbuf(pb)
+            self._update_cover_display_mode()
+        GLib.idle_add(_apply)
+
+    def _build_explore_page(self) -> Gtk.Widget:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        box.set_margin_start(16); box.set_margin_end(16)
+        box.set_margin_top(16);   box.set_margin_bottom(16)
+        box.set_vexpand(True)
+
+        header = Gtk.Label(label='Explorar nuevas emisoras')
+        header.add_css_class('title-2')
+        header.set_xalign(0)
+        box.append(header)
+
+        search_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        search_bar.set_margin_top(12); search_bar.set_margin_bottom(8)
+
+        self._explore_search = Gtk.SearchEntry()
+        self._explore_search.set_placeholder_text('Buscar por género o etiqueta (p.ej. jazz, pop)…')
+        self._explore_search.set_hexpand(True)
+        self._explore_search.connect('activate', self._on_explore_search)
+        search_bar.append(self._explore_search)
+
+        search_btn = Gtk.Button(label='Buscar')
+        search_btn.add_css_class('suggested-action')
+        search_btn.connect('clicked', self._on_explore_search)
+        search_bar.append(search_btn)
+        box.append(search_bar)
+
+        self._explore_status = Adw.StatusPage()
+        self._explore_status.set_icon_name('m3-explore-symbolic')
+        self._explore_status.set_title('Explorar')
+        self._explore_status.set_description(
+            'Busca por género o etiqueta, o pulsa Buscar para ver emisoras de España.'
+        )
+        self._explore_status.set_vexpand(True)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
+
+        self._explore_list = Gtk.ListBox()
+        self._explore_list.add_css_class('boxed-list')
+        self._explore_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self._explore_list.connect('row-activated', self._on_explore_row_activated)
+        scroll.set_child(self._explore_list)
+
+        self._explore_stack = Gtk.Stack()
+        self._explore_stack.add_named(self._explore_status, 'empty')
+        self._explore_stack.add_named(scroll, 'results')
+        self._explore_stack.set_vexpand(True)
+        box.append(self._explore_stack)
+
+        return box
+
+    def _on_header_search(self, entry):
+        """Barra de búsqueda de la cabecera: atajo hacia Explorar, que ya
+        tiene su propia lógica de búsqueda por género/etiqueta."""
+        query = entry.get_text().strip()
+        if not query:
+            return
+        self._nav_list.select_row(self._nav_rows['explore'])
+        if self._explore_search is not None:
+            self._explore_search.set_text(query)
+            self._on_explore_search(None)
+        entry.set_text('')
+
+    def _on_explore_search(self, _widget):
+        query = self._explore_search.get_text().strip()
+        while child := self._explore_list.get_first_child():
+            self._explore_list.remove(child)
+        self._explore_status.set_description('Buscando…')
+        self._explore_stack.set_visible_child_name('empty')
+
+        if query:
+            radio_browser.fetch_by_tag(
+                query,
+                callback=lambda data, err: GLib.idle_add(self._on_explore_result, data, err),
+            )
+        else:
+            radio_browser.fetch_stations(
+                country='Spain', limit=200,
+                callback=lambda data, err: GLib.idle_add(self._on_explore_result, data, err),
+            )
+
+    def _on_explore_result(self, stations, error):
+        if error:
+            self._explore_status.set_description(f'Error al buscar: {error}')
+            self._explore_stack.set_visible_child_name('empty')
+            return
+        stations = stations or []
+        if not stations:
+            self._explore_status.set_description('Sin resultados para esa búsqueda.')
+            self._explore_stack.set_visible_child_name('empty')
+            return
+
+        for s in stations:
+            url = s.get('url_resolved') or s.get('url', '')
+            if not url:
+                continue
+            station = {
+                'name':        s.get('name', ''),
+                'url':         url,
+                'favicon':     s.get('favicon', ''),
+                'genre':       s.get('tags', ''),
+                'bitrate':     s.get('bitrate', ''),
+                'description': s.get('country', ''),
+            }
+            already_added = url in self._station_rows
+            row = StationRow(station, is_favorite=already_added, on_toggle_fav=self._on_explore_add)
+            if already_added:
+                row.set_tooltip_text('Ya está en tu lista de emisoras')
+            self._explore_list.append(row)
+
+            favicon = station.get('favicon', '')
+            if favicon and favicon.startswith('http'):
+                radio_browser.fetch_image(
+                    favicon, lambda data, err, r=row: r.set_logo_bytes(data) if data else None,
+                )
+
+        self._explore_stack.set_visible_child_name('results')
+
+    def _on_explore_add(self, station: dict, btn: Gtk.Button):
+        url = station.get('url', '')
+        if url in self._station_rows:
+            return
+        self._add_station_row(station)
+        self._fetch_station_logos([station])
+        self._refresh_home_cards()
+        btn.set_icon_name('m3-star-symbolic')
+        btn.set_sensitive(False)
+        btn.set_tooltip_text('Ya está en tu lista de emisoras')
+        self._toast_overlay.add_toast(Adw.Toast(title=f"Añadida: {station.get('name', '')}"))
+
+    def _on_explore_row_activated(self, _listbox, row):
+        if not isinstance(row, StationRow):
+            return
+        real_row = self._station_rows.get(row.station.get('url', ''))
+        if real_row:
+            self._nav_list.select_row(self._nav_rows['radio'])
+            self._on_station_activated(self._radio_list, real_row)
+        else:
+            # Preview a not-yet-added station directly.
+            self._is_radio        = True
+            self._current_station = row.station
+            self._current_file    = None
+            self._title_label.set_text(row.station.get('name', ''))
+            self._artist_label.set_text(row.station.get('description', ''))
+            self._album_label.set_text(str(row.station.get('genre', '')))
+            self._set_radio_mode(True)
+            self._player.play(row.station.get('url', ''))
 
     def _build_radio_page(self):
         page_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -1198,13 +2376,6 @@ class RadioWindow(Adw.ApplicationWindow):
         self._radio_search.set_hexpand(True)
         self._radio_search.connect('search-changed', self._filter_stations)
         search_bar.append(self._radio_search)
-
-        discover_btn = Gtk.Button()
-        discover_btn.set_icon_name('m3-explore-symbolic')
-        discover_btn.set_tooltip_text('Descubrir más emisoras (Radio Browser)')
-        discover_btn.add_css_class('flat')
-        discover_btn.connect('clicked', self._on_discover)
-        search_bar.append(discover_btn)
 
         add_btn = Gtk.Button()
         add_btn.set_icon_name('m3-add-symbolic')
@@ -1249,16 +2420,10 @@ class RadioWindow(Adw.ApplicationWindow):
         self._radio_list.set_filter_func(self._radio_filter_func)
         self._radio_list.set_sort_func(self._radio_sort_func)
 
-        fav_header = GenreHeaderRow('Favoritas', self._toggle_genre_collapse)
-        self._genre_headers['Favoritas'] = fav_header
-        self._radio_list.append(fav_header)
-
         scroll.set_child(self._radio_list)
         page_box.append(scroll)
 
-        self._view_stack.add_titled_with_icon(
-            page_box, 'radio', 'Radio', 'm3-radio-symbolic'
-        )
+        return page_box
 
     def _build_mp3_page(self):
         mp3_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -1336,9 +2501,7 @@ class RadioWindow(Adw.ApplicationWindow):
         scroll.set_child(self._mp3_list)
         mp3_box.append(scroll)
 
-        self._view_stack.add_titled_with_icon(
-            mp3_box, 'mp3', 'MP3', 'm3-music-note-symbolic'
-        )
+        return mp3_box
 
     def _build_now_playing(self) -> Gtk.Widget:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -1480,8 +2643,13 @@ class RadioWindow(Adw.ApplicationWindow):
         bar.append(self._live_box)
         self._live_box.set_visible(False)
 
-        vol_icon = Gtk.Image.new_from_icon_name('m3-volume-up-symbolic')
-        bar.append(vol_icon)
+        self._vol_btn = Gtk.Button()
+        self._vol_btn.set_icon_name('m3-volume-up-symbolic')
+        self._vol_btn.add_css_class('flat')
+        self._vol_btn.add_css_class('circular')
+        self._vol_btn.set_tooltip_text('Silenciar')
+        self._vol_btn.connect('clicked', self._on_vol_btn_clicked)
+        bar.append(self._vol_btn)
 
         self._vol_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 1, 0.05)
         self._vol_scale.set_value(self._player.get_volume())
@@ -1519,16 +2687,15 @@ class RadioWindow(Adw.ApplicationWindow):
     # ── Sort / header for radio list ───────────────────────────────────────────
 
     def _radio_sort_func(self, row1, row2):
+        # Favoriting a station no longer pulls it out of its genre group —
+        # it always sorts by its real genre; the dedicated Favoritos page
+        # (nav rail) is where "just the favorites" lives now. This avoids
+        # leaving a genre header with zero stations under it once its only
+        # member gets favorited.
         def _key(row):
             if isinstance(row, GenreHeaderRow):
-                # Favoritas header always first; other genre headers before their stations
-                if row.genre == 'Favoritas':
-                    return ('\x00', 0, '')
                 return (row.genre.lower(), 0, '')
             if isinstance(row, StationRow):
-                url = row.station.get('url', '')
-                if url in self._favorites:
-                    return ('\x00', 1, row.station.get('name', '').lower())
                 genre = (row.station.get('genre', '') or 'Sin género').lower()
                 return (genre, 1, row.station.get('name', '').lower())
             return ('~', 0, '')
@@ -1544,6 +2711,8 @@ class RadioWindow(Adw.ApplicationWindow):
             self._add_station_row(s)
         if stations:
             self._fetch_station_logos(stations)
+        self._refresh_home_cards()
+        self._refresh_favorites_page()
 
     def _add_station_row(self, station: dict):
         genre = station.get('genre', '') or 'Sin género'
@@ -1583,6 +2752,7 @@ class RadioWindow(Adw.ApplicationWindow):
         threading.Thread(target=lambda: _save_config(self._config), daemon=True).start()
         self._radio_list.invalidate_sort()
         self._radio_list.invalidate_filter()
+        self._on_favorites_changed()
 
     def _toggle_genre_collapse(self, genre: str):
         if genre in self._collapsed_genres:
@@ -1787,10 +2957,7 @@ class RadioWindow(Adw.ApplicationWindow):
             desc  = str(row.station.get('description', '')).lower()
             return query in name or query in genre or query in tags or query in desc
 
-        url = row.station.get('url', '')
-        section = 'Favoritas' if url in self._favorites else (
-            row.station.get('genre', '') or 'Sin género'
-        )
+        section = row.station.get('genre', '') or 'Sin género'
         return section not in self._collapsed_genres
 
     def _mp3_filter_func(self, row):
@@ -1930,10 +3097,23 @@ class RadioWindow(Adw.ApplicationWindow):
         self._update_cover_display_mode()
 
     def _on_volume_changed(self, scale):
-        self._player.set_volume(scale.get_value())
+        value = scale.get_value()
+        self._player.set_volume(value)
+
+        # Mantiene el icono de mute en sync también cuando el volumen se
+        # arrastra a mano (no solo al pulsar el botón/atajo M).
+        if value > 0.0001:
+            self._last_nonzero_vol = value
+            if self._muted:
+                self._muted = False
+                self._update_vol_icon()
+        elif not self._muted:
+            self._muted = True
+            self._update_vol_icon()
+
         if self._volume_save_timer:
             GLib.source_remove(self._volume_save_timer)
-        self._volume_save_timer = GLib.timeout_add(500, self._save_volume_now, scale.get_value())
+        self._volume_save_timer = GLib.timeout_add(500, self._save_volume_now, value)
 
     def _save_volume_now(self, value):
         self._volume_save_timer = None
@@ -1970,6 +3150,9 @@ class RadioWindow(Adw.ApplicationWindow):
         self._spectrum_viz.push(magnitudes)
 
     def _on_eos(self, _player):
+        if self._current_episode is not None:
+            self._mark_current_episode_listened()
+            return
         if self._is_radio:
             return
         if self._play_mode == 'shuffle':
@@ -2050,19 +3233,58 @@ class RadioWindow(Adw.ApplicationWindow):
             self._seek_bar.set_value(pos / dur)
             self._pos_label.set_text(_fmt_time(pos))
             self._dur_label.set_text(_fmt_time(dur))
+            if self._current_episode is not None:
+                self._maybe_save_episode_progress(pos // Gst.SECOND, dur // Gst.SECOND)
         return True
+
+    def _maybe_save_episode_progress(self, pos_sec: int, dur_sec: int):
+        """Persiste la posición del episodio actual, con throttling (no en
+        cada tick de 500ms del timer, solo cada ~5s de progreso real)."""
+        ep = self._current_episode
+        if ep is None:
+            return
+        last = ep.get('_last_saved_pos', -999)
+        if abs(pos_sec - last) < 5:
+            return
+        ep['_last_saved_pos'] = pos_sec
+        entry = self._podcasts_data.setdefault('episodes', {}).setdefault(ep['guid'], {})
+        entry.update({
+            'feed_url':    (self._current_podcast_show or {}).get('feed_url', ''),
+            'title':       ep.get('title', ''),
+            'pub_date':    ep.get('pub_date', ''),
+            'audio_url':   ep.get('audio_url', ''),
+            'duration_sec': dur_sec or ep.get('duration_sec', 0),
+            'position_sec': pos_sec,
+        })
+        entry.setdefault('listened', False)
+        entry.setdefault('downloaded_path', None)
+        threading.Thread(target=lambda: _save_podcasts_data(self._podcasts_data), daemon=True).start()
+
+    def _mark_current_episode_listened(self):
+        ep = self._current_episode
+        if ep is None:
+            return
+        entry = self._podcasts_data.setdefault('episodes', {}).setdefault(ep['guid'], {})
+        entry.update({
+            'feed_url':    (self._current_podcast_show or {}).get('feed_url', ''),
+            'title':       ep.get('title', ''),
+            'pub_date':    ep.get('pub_date', ''),
+            'audio_url':   ep.get('audio_url', ''),
+            'listened':    True,
+            'position_sec': 0,
+        })
+        entry.setdefault('downloaded_path', None)
+        entry.setdefault('duration_sec', ep.get('duration_sec', 0))
+        threading.Thread(target=lambda: _save_podcasts_data(self._podcasts_data), daemon=True).start()
+        row = ep.get('row')
+        if row is not None:
+            row.set_listened(True)
 
     # ── UI helpers ─────────────────────────────────────────────────────────────
 
     def _set_radio_mode(self, is_radio: bool):
         self._live_box.set_visible(is_radio)
         self._progress_box.set_visible(not is_radio)
-
-    def _on_tab_switched(self, stack, _param):
-        if self._mode_btn is None:
-            return  # la pila puede emitir el cambio inicial antes de _build_controls()
-        is_mp3 = stack.get_visible_child_name() == 'mp3'
-        self._mode_btn.set_visible(is_mp3)
 
     def _update_meta_chips(self, chips: dict):
         while child := self._meta_box.get_first_child():
@@ -2127,7 +3349,7 @@ class RadioWindow(Adw.ApplicationWindow):
             return
         if not files:
             return
-        self._view_stack.set_visible_child_name('mp3')
+        self._nav_list.select_row(self._nav_rows['local'])
 
         def _load_in_background():
             for i in range(files.get_n_items()):
@@ -2363,58 +3585,6 @@ class RadioWindow(Adw.ApplicationWindow):
         self._toast_overlay.add_toast(toast)
         return GLib.SOURCE_REMOVE
 
-    # ── Discover (Radio Browser API) ───────────────────────────────────────────
-
-    def _on_discover(self, _btn):
-        dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading='Buscar en Radio Browser',
-            body='Cargando emisoras de España desde la API de Radio Browser…',
-        )
-        dialog.add_response('cancel', 'Cancelar')
-        dialog.present()
-
-        radio_browser.fetch_stations(
-            country='Spain',
-            limit=200,
-            callback=lambda data, err: GLib.idle_add(
-                self._on_browser_result, data, err, dialog
-            ),
-        )
-
-    def _on_browser_result(self, stations, error, dialog):
-        dialog.close()
-        if error:
-            err_dlg = Adw.MessageDialog(
-                transient_for=self,
-                heading='Error al obtener emisoras',
-                body=str(error),
-            )
-            err_dlg.add_response('ok', 'Aceptar')
-            err_dlg.present()
-            return
-
-        added = 0
-        for s in (stations or []):
-            url = s.get('url_resolved') or s.get('url', '')
-            if not url or url in self._station_rows:
-                continue
-            station = {
-                'name':        s.get('name', ''),
-                'url':         url,
-                'favicon':     s.get('favicon', ''),
-                'genre':       s.get('tags', ''),
-                'bitrate':     s.get('bitrate', ''),
-                'description': s.get('country', ''),
-            }
-            self._add_station_row(station)
-            self._fetch_station_logos([station])
-            added += 1
-
-        toast = Adw.Toast(title=f'Se añadieron {added} emisoras nuevas')
-        self._toast_overlay.add_toast(toast)
-
-
 # ── Keyboard shortcuts ─────────────────────────────────────────────────────────
 
     def _on_key_pressed(self, _ctrl, keyval, _keycode, _state):
@@ -2432,16 +3602,27 @@ class RadioWindow(Adw.ApplicationWindow):
             return True
         return False
 
+    def _on_vol_btn_clicked(self, _btn):
+        self._toggle_mute()
+
     def _toggle_mute(self):
         if self._muted:
+            target = self._last_nonzero_vol if self._last_nonzero_vol > 0.0001 else 0.5
             self._muted = False
-            self._player.set_volume(self._pre_mute_vol)
-            self._vol_scale.set_value(self._pre_mute_vol)
+            self._player.set_volume(target)
+            self._vol_scale.set_value(target)
         else:
-            self._pre_mute_vol = self._vol_scale.get_value()
             self._muted = True
             self._player.set_volume(0.0)
             self._vol_scale.set_value(0.0)
+        self._update_vol_icon()
+
+    def _update_vol_icon(self):
+        if self._vol_btn is None:
+            return
+        self._vol_btn.set_icon_name(
+            'm3-volume-off-symbolic' if self._muted else 'm3-volume-up-symbolic')
+        self._vol_btn.set_tooltip_text('Activar sonido' if self._muted else 'Silenciar')
 
     # ── Sleep timer ───────────────────────────────────────────────────────────
 
@@ -2535,7 +3716,7 @@ class RadioWindow(Adw.ApplicationWindow):
             return
         dialog = Gtk.FileDialog()
         dialog.set_title('Exportar favoritos')
-        dialog.set_initial_name('favoritos_radioes.json')
+        dialog.set_initial_name('favoritos_aerx.json')
         dialog.save(self, None, self._on_export_finish)
 
     def _on_export_finish(self, dialog, result):
@@ -2643,40 +3824,81 @@ class RadioWindow(Adw.ApplicationWindow):
 
     def _notify_now_playing(self, title: str, body: str = ''):
         try:
-            notif = Gio.Notification.new(title or 'RadioES')
+            notif = Gio.Notification.new(title or 'ÆRx Player')
             if body:
                 notif.set_body(body)
-            self.get_application().send_notification('radioes-now-playing', notif)
+            self.get_application().send_notification('aerx-now-playing', notif)
         except Exception:
             pass
 
     # ── Preferencias ─────────────────────────────────────────────────────────────
 
-    def _on_preferences(self, _btn):
-        dialog = Adw.MessageDialog(transient_for=self, heading='Preferencias')
-        dialog.add_response('close', 'Cerrar')
-        dialog.set_default_response('close')
+    def _build_settings_page(self) -> Gtk.Widget:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        box.set_margin_start(24); box.set_margin_end(24)
+        box.set_margin_top(20);   box.set_margin_bottom(16)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.set_margin_top(8)
+        title = Gtk.Label(label='Ajustes')
+        title.add_css_class('title-1')
+        title.set_xalign(0)
+        title.set_margin_bottom(20)
+        box.append(title)
 
-        update_check_btn = Gtk.CheckButton(label='Buscar actualizaciones al iniciar la aplicación')
-        update_check_btn.set_active(self._check_updates_on_startup)
-        box.append(update_check_btn)
+        theme_lbl = Gtk.Label(label='Tema')
+        theme_lbl.add_css_class('heading')
+        theme_lbl.set_xalign(0)
+        theme_lbl.set_margin_bottom(8)
+        box.append(theme_lbl)
 
-        notif_check_btn = Gtk.CheckButton(label='Mostrar notificaciones de escritorio')
-        notif_check_btn.set_active(self._desktop_notifications)
-        box.append(notif_check_btn)
+        theme_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        theme_box.add_css_class('linked')
+        theme_box.set_halign(Gtk.Align.START)
+        theme_box.set_margin_bottom(24)
 
-        dialog.set_extra_child(box)
+        first_btn = None
+        for mode, label_text in (('system', 'Sistema'), ('light', 'Claro'), ('dark', 'Oscuro')):
+            tbtn = Gtk.ToggleButton(label=label_text)
+            if first_btn is None:
+                first_btn = tbtn
+            else:
+                tbtn.set_group(first_btn)
+            tbtn.set_active(self._theme_mode == mode)
+            tbtn.connect('toggled', self._on_theme_mode_toggled, mode)
+            theme_box.append(tbtn)
+        box.append(theme_box)
 
-        dialog.connect('response', lambda d, r: self._on_preferences_response(
-            d, r, update_check_btn, notif_check_btn))
-        dialog.present()
+        general_lbl = Gtk.Label(label='General')
+        general_lbl.add_css_class('heading')
+        general_lbl.set_xalign(0)
+        general_lbl.set_margin_bottom(8)
+        box.append(general_lbl)
 
-    def _on_preferences_response(self, _dialog, _response, update_check_btn, notif_check_btn):
-        self._check_updates_on_startup = update_check_btn.get_active()
-        self._desktop_notifications    = notif_check_btn.get_active()
+        self._update_check_btn = Gtk.CheckButton(
+            label='Buscar actualizaciones al iniciar la aplicación')
+        self._update_check_btn.set_active(self._check_updates_on_startup)
+        self._update_check_btn.connect('toggled', self._on_settings_changed)
+        box.append(self._update_check_btn)
+
+        self._notif_check_btn = Gtk.CheckButton(label='Mostrar notificaciones de escritorio')
+        self._notif_check_btn.set_active(self._desktop_notifications)
+        self._notif_check_btn.connect('toggled', self._on_settings_changed)
+        box.append(self._notif_check_btn)
+
+        return box
+
+    def _on_theme_mode_toggled(self, btn: Gtk.ToggleButton, mode: str):
+        if not btn.get_active():
+            return
+        self._theme_mode = mode
+        self._config['theme_mode'] = mode
+        threading.Thread(target=lambda: _save_config(self._config), daemon=True).start()
+        Adw.StyleManager.get_default().set_color_scheme(
+            self._THEME_SCHEME_MAP.get(mode, Adw.ColorScheme.DEFAULT)
+        )
+
+    def _on_settings_changed(self, _btn=None):
+        self._check_updates_on_startup = self._update_check_btn.get_active()
+        self._desktop_notifications    = self._notif_check_btn.get_active()
         self._config['check_updates_on_startup'] = self._check_updates_on_startup
         self._config['desktop_notifications']    = self._desktop_notifications
         threading.Thread(target=lambda: _save_config(self._config), daemon=True).start()
@@ -2706,8 +3928,8 @@ class RadioWindow(Adw.ApplicationWindow):
                                    lambda info, err: GLib.idle_add(self._present_about, info, err))
 
     def _present_about(self, update_info, _update_error):
-        _icon_name = 'radioes'
-        comments = 'Reproductor de radio española online y archivos de audio locales\n\nMade with ❤ by SaruMan'
+        _icon_name = 'aerx-player'
+        comments = 'Radio y Audio, sin fronteras.\nReproductor de radio online y archivos de audio locales\n\nMade with ❤ by SaruMan'
 
         if update_info and update_info.get('is_newer'):
             update_label = f"⬇ Descargar la nueva versión v{update_info['version']}"
@@ -2721,23 +3943,25 @@ class RadioWindow(Adw.ApplicationWindow):
 
         if hasattr(Adw, 'AboutDialog'):
             about = Adw.AboutDialog()
-            about.set_application_name('RadioES')
+            about.set_application_name('ÆRx Player')
             about.set_version(APP_VERSION)
             about.set_developer_name('SaruMan')
-            about.set_license_type(Gtk.License.MIT_X11)
+            about.set_license_type(Gtk.License.GPL_3_0)
             about.set_comments(comments)
             about.set_application_icon(_icon_name)
             about.add_link(update_label, update_uri)
+            about.add_link('☕ Apóyame en Ko-fi', KOFI_URL)
             about.present(self)
         else:
             about = Adw.AboutWindow(transient_for=self)
-            about.set_application_name('RadioES')
+            about.set_application_name('ÆRx Player')
             about.set_version(APP_VERSION)
             about.set_developer_name('SaruMan')
-            about.set_license_type(Gtk.License.MIT_X11)
+            about.set_license_type(Gtk.License.GPL_3_0)
             about.set_comments(comments)
             about.set_application_icon(_icon_name)
             about.add_link(update_label, update_uri)
+            about.add_link('☕ Apóyame en Ko-fi', KOFI_URL)
             about.present()
         return GLib.SOURCE_REMOVE
 
@@ -2754,7 +3978,7 @@ def _fmt_time(ns: int) -> str:
 class RadioApp(Adw.Application):
     def __init__(self):
         super().__init__(
-            application_id='es.radioes.app',
+            application_id='es.aerx.player',
             flags=Gio.ApplicationFlags.DEFAULT_FLAGS,
         )
         self.connect('activate', self._on_activate)
@@ -2762,12 +3986,12 @@ class RadioApp(Adw.Application):
     def _on_activate(self, app):
         import os as _os, shutil as _sh, hashlib as _hl
         _base = _os.path.dirname(_os.path.abspath(__file__))
-        _src = _os.path.join(_base, 'data', 'icons', 'radioes-256.png')
+        _src = _os.path.join(_base, 'data', 'icons', 'hicolor', '256x256', 'apps', 'aerx-player.png')
         if _os.path.exists(_src):
             _dest_dir = _os.path.join(_os.path.expanduser('~'),
                                       '.local', 'share', 'icons', 'hicolor', '256x256', 'apps')
             _os.makedirs(_dest_dir, exist_ok=True)
-            _dst = _os.path.join(_dest_dir, 'radioes.png')
+            _dst = _os.path.join(_dest_dir, 'aerx-player.png')
             _md5 = lambda p: _hl.md5(open(p, 'rb').read()).hexdigest()
             if not _os.path.exists(_dst) or _md5(_src) != _md5(_dst):
                 _sh.copy(_src, _dst)   # copy sin copiar mtime → GTK invalida caché

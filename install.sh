@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# RadioES – instala dependencias del sistema, iconos y entrada del lanzador
+# ÆRx Player – instala dependencias del sistema, iconos y entrada del lanzador
 set -e
 
 APP_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-BINARY="$APP_DIR/bin/radioes"
+BINARY="$APP_DIR/bin/aerx"
 
 # ── 1. Dependencias del sistema ──────────────────────────────────────────────
 echo "==> Instalando dependencias del sistema…"
@@ -16,7 +16,8 @@ sudo apt-get install -y \
     gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
     gstreamer1.0-libav libgstreamer1.0-0 \
-    python3-pip
+    python3-pip \
+    fonts-inter
 
 # ── 2. Dependencias Python ───────────────────────────────────────────────────
 echo "==> Instalando dependencias Python…"
@@ -28,13 +29,15 @@ chmod +x "$BINARY"
 
 # ── 4. Iconos (hicolor icon theme) ──────────────────────────────────────────
 echo "==> Instalando iconos…"
-ICON_SRC="$APP_DIR/data/icons"
+ICON_SRC="$APP_DIR/data/icons/hicolor"
 ICON_DST="$HOME/.local/share/icons/hicolor"
 
-for SIZE in 48 64 128 256 512; do
-    install -Dm644 "$ICON_SRC/radioes-${SIZE}.png" \
-        "$ICON_DST/${SIZE}x${SIZE}/apps/radioes.png"
+for SIZE in 16 32 48 64 128 256 512; do
+    install -Dm644 "$ICON_SRC/${SIZE}x${SIZE}/apps/aerx-player.png" \
+        "$ICON_DST/${SIZE}x${SIZE}/apps/aerx-player.png"
 done
+install -Dm644 "$ICON_SRC/scalable/apps/aerx-player.svg" \
+    "$ICON_DST/scalable/apps/aerx-player.svg"
 
 # Refresh icon cache (silent if gtk-update-icon-cache absent)
 gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
@@ -44,8 +47,8 @@ echo "==> Instalando entrada del lanzador…"
 DESK_DIR="$HOME/.local/share/applications"
 mkdir -p "$DESK_DIR"
 
-sed "s|RADIOES_BIN|$BINARY|g" "$APP_DIR/radioes.desktop" \
-    > "$DESK_DIR/radioes.desktop"
+sed "s|AERX_BIN|$BINARY|g" "$APP_DIR/aerx-player.desktop" \
+    > "$DESK_DIR/aerx-player.desktop"
 
 # Refresh desktop database
 update-desktop-database "$DESK_DIR" 2>/dev/null || true
@@ -53,10 +56,10 @@ update-desktop-database "$DESK_DIR" 2>/dev/null || true
 # ── 6. Enlace simbólico opcional en ~/.local/bin ─────────────────────────────
 BIN_LOCAL="$HOME/.local/bin"
 mkdir -p "$BIN_LOCAL"
-ln -sf "$BINARY" "$BIN_LOCAL/radioes"
+ln -sf "$BINARY" "$BIN_LOCAL/aerx"
 
 echo ""
-echo "✓ RadioES instalado."
-echo "  • Lanzar desde terminal:  radioes"
+echo "✓ ÆRx Player instalado."
+echo "  • Lanzar desde terminal:  aerx"
 echo "  • Lanzar directo:         $BINARY"
-echo "  • Buscarlo en el lanzador de apps como: RadioES"
+echo "  • Buscarlo en el lanzador de apps como: ÆRx Player"

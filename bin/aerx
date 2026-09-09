@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RadioES launcher — resolves paths regardless of cwd or symlinks
+# ÆRx Player launcher — resolves paths regardless of cwd or symlinks
 SCRIPT="$(readlink -f "$0")"
 BIN_DIR="$(dirname "$SCRIPT")"
 APP_DIR="$(dirname "$BIN_DIR")"

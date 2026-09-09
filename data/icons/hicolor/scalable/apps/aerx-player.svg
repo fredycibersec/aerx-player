@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+
+  <title>ÆRx Player — app icon</title>
+
+  <defs>
+    <linearGradient id="waveGradient" x1="100" y1="300" x2="1100" y2="650" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#06D9FF"/>
+      <stop offset="32%"  stop-color="#00BFFF"/>
+      <stop offset="58%"  stop-color="#4169FF"/>
+      <stop offset="78%"  stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#EC22FF"/>
+    </linearGradient>
+    <linearGradient id="waveHighlight" x1="180" y1="270" x2="1050" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="30%"  stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="55%"  stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="tileGradient" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#141A30"/>
+      <stop offset="100%" stop-color="#0B1020"/>
+    </linearGradient>
+    <filter id="waveGlow" x="-30%" y="-50%" width="160%" height="200%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="
+            0 0 0 0 0.05
+            0 0 0 0 0.55
+            0 0 0 0 1
+            0 0 0 0.65 0" result="colored"/>
+      <feMerge>
+        <feMergeNode in="colored"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="url(#tileGradient)"/>
+
+  <g transform="translate(60.434,144.489) scale(0.306769)">
+    <g filter="url(#waveGlow)">
+      <path
+          d="
+          M 90 435
+          C 155 445, 215 395, 275 350
+          C 325 312, 365 320, 400 385
+          C 440 460, 455 535, 505 545
+          C 560 555, 575 475, 600 390
+          C 625 305, 650 205, 710 185
+          C 765 167, 795 230, 820 315
+          C 850 415, 865 530, 920 545
+          C 975 560, 990 475, 1015 405
+          C 1040 335, 1080 315, 1120 345
+          C 1150 368, 1170 395, 1185 410
+          "
+          fill="none"
+          stroke="url(#waveGradient)"
+          stroke-width="72"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+      <path
+          d="
+          M 90 420
+          C 155 430, 215 380, 275 335
+          C 325 297, 365 305, 400 370
+          C 440 445, 455 520, 505 530
+          C 560 540, 575 460, 600 375
+          C 625 290, 650 190, 710 170
+          C 765 152, 795 215, 820 300
+          C 850 400, 865 515, 920 530
+          C 975 545, 990 460, 1015 390
+          C 1040 320, 1080 300, 1120 330
+          C 1150 353, 1170 380, 1185 395
+          "
+          fill="none"
+          stroke="url(#waveHighlight)"
+          stroke-width="14"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          opacity="0.85"/>
+    </g>
+  </g>
+
+</svg>

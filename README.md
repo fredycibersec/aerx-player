@@ -1,39 +1,48 @@
-# RadioES
-<p align=center>
-<img width="300" alt="radioes_icon" src="https://github.com/user-attachments/assets/88b11deb-c965-44f4-8d8d-4f87af4ab687" />
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/aerx-player-logo.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/branding/aerx-player-logo-light.svg">
+    <img alt="ÆRx Player" src="assets/branding/aerx-player-logo.svg" width="320">
+  </picture>
+</h1>
+
+<p align="center">
+  <a href="LICENSE"><img alt="License: GPLv3" src="https://img.shields.io/badge/License-GPLv3-blue.svg"></a>
+  <a href="../../releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/fredycibersec/aerx-player?include_prereleases&label=release&color=orange"></a>
+  <a href="../../actions/workflows/build-release.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/fredycibersec/aerx-player/build-release.yml?label=build"></a>
+  <a href="../../releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/fredycibersec/aerx-player/total"></a>
+  <a href="../../commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/fredycibersec/aerx-player"></a>
+  <img alt="Platform: Linux" src="https://img.shields.io/badge/platform-Linux-informational?logo=linux&logoColor=white">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
 </p>
 
-> Reproductor de radio española online y archivos de audio locales, con interfaz GTK4/Adwaita.
+<p align="center"><strong>Radio y Audio, sin fronteras.</strong></p>
 
-<p align=center>
-    <img width="900" alt="Radio" src="data/screenshots/01-radio.png" />
-    <img width="900" alt="MP3 con edición de etiquetas" src="data/screenshots/02-mp3.png" />
-</p>
-<p align=center>
-    <img width="440" alt="Editar etiquetas" src="data/screenshots/03-editar-etiquetas.png" />
-    <img width="440" alt="Preferencias" src="data/screenshots/06-preferencias.png" />
-</p>
-<p align=center>
-    <img width="900" alt="Fondo de carátula a pantalla completa" src="data/screenshots/04-fondo-caratula.png" />
-</p>
-<p align=center>
-    <img width="900" alt="Visualizador: Vúmetro y Partículas" src="data/screenshots/05-visualizadores.png" />
-</p>
+<!-- TODO: capturas pendientes del rediseño ÆRx Player -->
 
-RadioES es una aplicación de escritorio para **distribuciones basadas en Debian/Ubuntu** (Ubuntu 22.04+, Linux Mint 21+, Debian 12+) que permite escuchar emisoras de radio españolas en directo y reproducir archivos de audio locales, todo con una interfaz moderna integrada en el escritorio GNOME/Adwaita.
+**ÆRx Player** es una aplicación de escritorio para **distribuciones basadas en Debian/Ubuntu** (Ubuntu 22.04+, Linux Mint 21+, Debian 12+) que permite escuchar emisoras de radio españolas en directo, seguir podcasts y reproducir archivos de audio locales, con una interfaz Material Design 3 integrada en el escritorio GNOME/Adwaita.
+
+> Anteriormente publicada como **RadioES**, el proyecto se relanza bajo la marca **ÆRx Player** junto con un rediseño Material Design 3 y soporte de podcasts.
+
+---
+
+> [!IMPORTANT]
+> **ÆRx Player está en fase 0.99-beta**, la última beta antes del lanzamiento estable de la **1.0**. Es funcional y estable en el día a día, pero puede haber cambios de última hora en la interfaz o en el formato de configuración antes de la versión final. ¡Los reportes de fallos son muy bienvenidos!
 
 ---
 
 ## Características
 
-- **+20 emisoras preconfiguradas** — RNE 1/2/3/4/5, Cadena SER, Cadena 100, Rock FM, Los 40, Europa FM, Cadena Dial, COPE, Onda Cero, Cadena Dial, Megastar FM, Kiss FM, Radio 3, Café del Mar y más.
+- **Podcasts** — búsqueda vía iTunes Search API, suscripción por feed RSS y descarga de episodios.
+- **+20 emisoras preconfiguradas** — RNE 1/2/3/4/5, Cadena SER, Cadena 100, Rock FM, Los 40, Europa FM, Cadena Dial, COPE, Onda Cero, Megastar FM, Kiss FM, Radio 3, Café del Mar y más.
 - **Descubrimiento de emisoras** vía [Radio Browser API](https://www.radio-browser.info/) (búsqueda en tiempo real).
 - **Reproductor de archivos de audio** — MP3, FLAC, OGG, M4A, AAC, WAV, OPUS.
 - **Edición de etiquetas ID3/FLAC/MP4** — título, artista, álbum, nº de pista y carátula, con guardado directo en el fichero.
 - **Búsqueda automática de carátula e info** vía MusicBrainz + Cover Art Archive, con iTunes Search API como respaldo.
+- **Interfaz Material Design 3** — paleta de color por tonos (claro/oscuro reactivo), indicadores de progreso "wavy" e iconografía Material Symbols.
 - **Fondo de carátula a pantalla completa** con difuminado y oscurecido al ocultar el panel lateral, si la carátula tiene buena resolución.
 - **Comprobación de actualizaciones** desde "Acerca de", con enlace directo de descarga del `.deb` cuando hay una versión más reciente en GitHub.
-- **Visualizador de espectro** en forma de campana de Gauss con gradiente de color.
+- **Visualizador de espectro multi-modo** — 6 estilos: Gauss, barras agrupadas, osciloscopio, barras clásicas, radial, espejo.
 - **Secciones colapsables por género** con sección de Favoritas.
 - **Añadir emisoras manualmente** por URL; exportar/importar favoritos en JSON.
 - **Ordenar lista MP3** por nombre, título, artista o álbum.
@@ -42,7 +51,6 @@ RadioES es una aplicación de escritorio para **distribuciones basadas en Debian
 - **Caché persistente** de la lista MP3 y carpeta de música configurable con escaneo recursivo.
 - **Interfaz responsiva** con panel lateral adaptable (`Adw.OverlaySplitView`).
 - **Atajos de teclado** — `Espacio` play/pause · `←/→` anterior/siguiente · `M` silenciar.
-- Carátulas, metadatos ICY y lectura de etiquetas ID3 / FLAC / MP4.
 
 ---
 
@@ -53,15 +61,15 @@ RadioES es una aplicación de escritorio para **distribuciones basadas en Debian
 Descarga el último `.deb` desde la sección [Releases](../../releases/latest) e instálalo con:
 
 ```bash
-sudo apt install ./radioes_1.2.0_all.deb
+sudo apt install ./aerx-player_0.99-beta_all.deb
 ```
 
-Esto instala todas las dependencias automáticamente. Después busca **RadioES** en el lanzador de aplicaciones o ejecuta `radioes` en la terminal.
+Esto instala todas las dependencias automáticamente. Después busca **ÆRx Player** en el lanzador de aplicaciones o ejecuta `aerx` en la terminal.
 
 Para desinstalar:
 
 ```bash
-sudo apt remove radioes
+sudo apt remove aerx-player
 ```
 
 ### Opción 2 — Ejecutar desde el código fuente
@@ -76,19 +84,20 @@ sudo apt install \
     gir1.2-gdkpixbuf-2.0 \
     gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
-    gstreamer1.0-libav
+    gstreamer1.0-libav \
+    fonts-inter
 pip3 install --user mutagen requests
 ```
 
 **Lanzar:**
 
 ```bash
-git clone https://github.com/fredycibersec/radioes.git
-cd radioes
+git clone https://github.com/fredycibersec/aerx-player.git
+cd aerx-player
 python3 main.py
 # o bien:
 bash install.sh   # instala iconos y .desktop para el lanzador
-bin/radioes
+bin/aerx
 ```
 
 ---
@@ -100,7 +109,7 @@ Requiere `dpkg-dev`:
 ```bash
 sudo apt install dpkg-dev
 bash build-deb.sh
-# El paquete se genera en dist/radioes_<versión>_all.deb
+# El paquete se genera en dist/aerx-player_<versión>_all.deb
 ```
 
 El workflow de CI/CD en `.github/workflows/build-release.yml` construye y publica el `.deb` automáticamente cuando se crea un tag `v*`.
@@ -116,7 +125,7 @@ El workflow de CI/CD en `.github/workflows/build-release.yml` construye y public
 | `gir1.2-adw-1`                   | libadwaita (diseño GNOME HIG)  |
 | `gir1.2-gstreamer-1.0`           | GStreamer (reproducción audio) |
 | `gstreamer1.0-plugins-*`         | Codecs MP3, AAC, Vorbis, etc.  |
-| `python3-requests` *(o pip)*     | Descarga de emisoras/logos     |
+| `python3-requests` *(o pip)*     | Descarga de emisoras/logos/podcasts |
 | `python3-mutagen` *(opcional)*   | Lectura de metadatos MP3/FLAC  |
 
 ---
@@ -124,35 +133,35 @@ El workflow de CI/CD en `.github/workflows/build-release.yml` construye y public
 ## Estructura del proyecto
 
 ```
-radioes/
+aerx-player/
 ├── main.py              # Ventana principal, UI GTK4/Adwaita
 ├── player.py            # Reproductor GStreamer con soporte ICY
 ├── radio_browser.py     # Cliente API Radio Browser
+├── podcasts.py          # Búsqueda, RSS y descarga de podcasts
 ├── metadata.py          # Lectura de etiquetas ID3/FLAC/MP4
-├── bin/radioes          # Lanzador de shell
+├── cover_lookup.py       # Búsqueda automática de carátula (MusicBrainz/iTunes)
+├── update_check.py      # Comprobación de nuevas versiones vía GitHub Releases
+├── bin/aerx              # Lanzador de shell
+├── assets/branding/      # Logo, símbolo e icono de marca (SVG)
 ├── data/
-│   ├── icons/           # Iconos PNG (48–512 px)
+│   ├── icons/            # Tema de iconos hicolor (16–512 px) y símbolo de marca
+│   ├── style-m3-*.css    # Estilos Material Design 3
 │   └── spanish_stations.json   # Emisoras preconfiguradas
-├── radioes.desktop      # Entrada del lanzador de aplicaciones
-├── build-deb.sh         # Script para generar el .deb
-├── install.sh           # Instalador para ejecutar desde fuente
-└── dist/                # Paquetes .deb generados
+├── aerx-player.desktop   # Entrada del lanzador de aplicaciones
+├── build-deb.sh          # Script para generar el .deb
+├── install.sh            # Instalador para ejecutar desde fuente
+└── dist/                 # Paquetes .deb generados
 ```
 
 ---
 
 ## Versiones
 
-| Versión | Cambios destacados |
-|---------|-------------------|
-| 1.3.2   | Ajustes menores de estilo M3: icono play/pause más grande dentro del FAB circular, indicador de posición/volumen en forma de línea (no punto), indicador de progreso "wavy" corregido con las medidas exactas del spec oficial de Material 3 (ya no se ve la pista gris a través de la onda), umbral realista para activar el fondo desenfocado con el icono de la emisora |
-| 1.3.1   | Fix: `install.sh` referenciaba un `radioes.svg` inexistente y abortaba antes de copiar los iconos nuevos al tema de usuario; ahora instala directamente los PNG 48–512px, igual que `build-deb.sh` |
-| 1.3.0   | Rediseño Material Design 3: paleta de color por tonos (claro/oscuro reactivo), forma y tipografía M3, indicadores de progreso "wavy" (barra de reproducción y volumen), iconografía completa con Material Symbols, nuevo icono de app |
-| 1.2.2   | Edición de etiquetas ID3/FLAC/MP4 con guardado en disco, búsqueda automática de carátula/info (MusicBrainz + Cover Art Archive, respaldo iTunes), fondo de carátula a pantalla completa con blur al ocultar el panel lateral |
-| 1.2.1   | Visualizador multi-modo (6 estilos: Gauss, barras agrupadas, osciloscopio, barras clásicas, radial, espejo) |
-| 1.2.0   | Visualizador de espectro en campana, modo shuffle/repeat/secuencial, sleep timer, notificaciones, mute por teclado, ordenación MP3 |
-| 1.1.0   | Soporte `Adw.OverlaySplitView`, icono 512px, escaneo recursivo de carpetas |
-| 1.0.0   | Versión inicial: radio + MP3 + Radio Browser + favoritos |
+| Versión     | Cambios destacados |
+|-------------|-------------------|
+| 0.99-beta   | **Relanzamiento como ÆRx Player** (antes RadioES): nueva identidad de marca e iconografía, soporte de **podcasts** (búsqueda, suscripción y descarga de episodios), y últimos ajustes de estilo Material Design 3 en los controles de reproducción. Última beta antes de la **1.0**. |
+
+> El historial de versiones 1.0.0–1.3.2 bajo el nombre RadioES puede consultarse en las [releases anteriores](../../releases) del repositorio.
 
 ---
 
@@ -171,6 +180,33 @@ radioes/
 
 ---
 
+## Contribuir
+
+¡Los reportes de fallos, ideas y pull requests son bienvenidos!
+
+- **Reportar un fallo o proponer una idea:** abre un [issue](../../issues/new) describiendo el problema (pasos para reproducirlo, distro/versión de GTK) o la mejora propuesta.
+- **Pull requests:** haz un fork del repositorio, crea una rama descriptiva (`fix/...`, `feat/...`) y abre el PR contra `main`. Para cambios grandes, abre antes un issue para discutir el enfoque.
+- **Entorno de desarrollo:** sigue la [Opción 2 de instalación](#opción-2--ejecutar-desde-el-código-fuente) para ejecutar la app desde el código fuente y probar tus cambios con `python3 main.py`.
+- **Estilo:** mantén la consistencia con el resto del código (nombres en español para UI/comentarios de dominio, PEP 8 razonable) y evita añadir dependencias nuevas sin justificarlo en el PR.
+
+---
+
+## Agradecimientos
+
+- [Radio Browser](https://www.radio-browser.info/) — API de descubrimiento de emisoras de radio.
+- [MusicBrainz](https://musicbrainz.org/) y [Cover Art Archive](https://coverartarchive.org/) — metadatos y carátulas de álbumes.
+- [iTunes Search API](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/) — respaldo de carátulas y búsqueda de podcasts.
+- [Material Symbols](https://fonts.google.com/icons) (Google) — iconografía de la interfaz.
+- GNOME, GTK4 y libadwaita — toolkit e integración de escritorio.
+
+---
+
 ## Licencia
 
-MIT © 2026 [SaruMan](mailto:sarumanthegrey@proton.me)
+GPL-3.0 © 2026 [SaruMan](mailto:sarumanthegrey@proton.me)
+
+---
+
+<p align="center">
+  <a href="https://ko-fi.com/V7D726PG7M"><img alt="ko-fi" src="https://ko-fi.com/img/githubbutton_sm.svg"></a>
+</p>
