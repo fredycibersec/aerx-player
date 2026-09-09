@@ -1,2 +1,2 @@
 mutagen>=1.46
-requests>=2.28
+requests>=2.34.2
