@@ -1357,11 +1357,9 @@ class RadioWindow(Adw.ApplicationWindow):
 
         # Content slot: swaps between the Home dashboard, the shared
         # now-playing panel (used by Radio/Local Music/Favorites) and Explore.
-        # Gtk.Stack (not Adw.ViewStack, which has no transition support in
-        # this libadwaita) so Inicio <-> otra sección puede deslizar — ver
-        # _on_nav_selected, que solo activa el deslizamiento en ese caso.
-        self._content_stack = Gtk.Stack()
-        self._content_stack.set_transition_type(Gtk.StackTransitionType.NONE)
+        # Sin transición: el contenido principal es inamovible, solo desliza
+        # el panel izquierdo (ver _sidebar_stack en _build_nav_rail).
+        self._content_stack = Adw.ViewStack()
         self._content_stack.add_named(self._build_home_page(), 'home')
         self._content_stack.add_named(content_overlay, 'player')
         self._content_stack.add_named(self._build_explore_page(), 'explore')
@@ -1433,6 +1431,11 @@ class RadioWindow(Adw.ApplicationWindow):
         their own, so selecting them always keeps the menu visible."""
         self._sidebar_stack = Gtk.Stack()
         self._sidebar_stack.set_vexpand(True)
+        # Único punto que desliza: menú (Inicio/Explorar/Ajustes) <-> lista
+        # de una sección (Radio/Local/Favoritos/Podcasts). El contenido
+        # principal a la derecha es inamovible.
+        self._sidebar_stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
+        self._sidebar_stack.set_transition_duration(220)
 
         # ── "menu" page: section navigation (logo now lives in the
         # headerbar, replacing the old plain toggle icon) ──
@@ -1561,14 +1564,6 @@ class RadioWindow(Adw.ApplicationWindow):
             'favorites': 'player', 'podcasts': 'player',
             'explore': 'explore', 'settings': 'settings',
         }[nav_id]
-
-        # Deslizamiento solo al entrar o salir de Inicio; entre el resto de
-        # secciones (p.ej. Radio -> Podcasts) el cambio sigue siendo instantáneo.
-        old_page = self._content_stack.get_visible_child_name()
-        if old_page != content_page and 'home' in (old_page, content_page):
-            self._content_stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
-        else:
-            self._content_stack.set_transition_type(Gtk.StackTransitionType.NONE)
         self._content_stack.set_visible_child_name(content_page)
 
         has_list = nav_id in self._NAV_LABELS
