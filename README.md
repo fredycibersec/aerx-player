@@ -184,8 +184,10 @@ aerx-player/
 
 ¡Los reportes de fallos, ideas y pull requests son bienvenidos!
 
-- **Reportar un fallo o proponer una idea:** abre un [issue](../../issues/new) describiendo el problema (pasos para reproducirlo, distro/versión de GTK) o la mejora propuesta.
-- **Pull requests:** haz un fork del repositorio, crea una rama descriptiva (`fix/...`, `feat/...`) y abre el PR contra `main`. Para cambios grandes, abre antes un issue para discutir el enfoque.
+- **Reportar un fallo:** abre un [issue de bug](../../issues/new?template=bug_report.yml) — la plantilla te pedirá versión, distro y pasos para reproducirlo.
+- **Proponer una idea:** abre un [issue de mejora](../../issues/new?template=feature_request.yml) describiendo el problema que resuelve y la solución propuesta.
+- **Vulnerabilidades de seguridad:** **no** uses un issue público — sigue el proceso descrito en [SECURITY.md](SECURITY.md).
+- **Pull requests:** haz un fork del repositorio, crea una rama descriptiva (`fix/...`, `feat/...`) y abre el PR contra `main` (la plantilla te guía sobre qué incluir). Para cambios grandes, abre antes un issue para discutir el enfoque.
 - **Entorno de desarrollo:** sigue la [Opción 2 de instalación](#opción-2--ejecutar-desde-el-código-fuente) para ejecutar la app desde el código fuente y probar tus cambios con `python3 main.py`.
 - **Estilo:** mantén la consistencia con el resto del código (nombres en español para UI/comentarios de dominio, PEP 8 razonable) y evita añadir dependencias nuevas sin justificarlo en el PR.
 

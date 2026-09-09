@@ -1,0 +1,74 @@
+name: 🐛 Reportar un fallo
+description: Reporta un problema o comportamiento inesperado en ÆRx Player
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ¡Gracias por dedicar tiempo a reportar un fallo! Cuanta más información des, antes se podrá reproducir y corregir.
+
+        ⚠️ Si se trata de una **vulnerabilidad de seguridad**, no la reportes aquí — sigue el proceso descrito en [SECURITY.md](../../blob/main/SECURITY.md).
+
+  - type: input
+    id: version
+    attributes:
+      label: Versión de ÆRx Player
+      description: La ves en "Acerca de", o con `dpkg -s aerx-player`
+      placeholder: "0.99-beta"
+    validations:
+      required: true
+
+  - type: input
+    id: distro
+    attributes:
+      label: Distribución y versión
+      placeholder: "Ubuntu 24.04 LTS"
+    validations:
+      required: true
+
+  - type: input
+    id: install-method
+    attributes:
+      label: Método de instalación
+      placeholder: "Paquete .deb / código fuente (python3 main.py)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducirlo
+      description: Pasos concretos y en orden
+      placeholder: |
+        1. Abrir ÆRx Player
+        2. Ir a Podcasts → Buscar
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamiento esperado
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamiento actual
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / salida de terminal
+      description: Ejecuta `python3 main.py` desde una terminal y pega aquí la salida relevante (se formatea automáticamente como código)
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Contexto adicional
+      description: Capturas de pantalla, configuración concreta, etc.
