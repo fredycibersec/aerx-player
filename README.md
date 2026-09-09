@@ -145,6 +145,7 @@ radioes/
 
 | Versión | Cambios destacados |
 |---------|-------------------|
+| 1.3.2   | Ajustes menores de estilo M3: icono play/pause más grande dentro del FAB circular, indicador de posición/volumen en forma de línea (no punto), indicador de progreso "wavy" corregido con las medidas exactas del spec oficial de Material 3 (ya no se ve la pista gris a través de la onda), umbral realista para activar el fondo desenfocado con el icono de la emisora |
 | 1.3.1   | Fix: `install.sh` referenciaba un `radioes.svg` inexistente y abortaba antes de copiar los iconos nuevos al tema de usuario; ahora instala directamente los PNG 48–512px, igual que `build-deb.sh` |
 | 1.3.0   | Rediseño Material Design 3: paleta de color por tonos (claro/oscuro reactivo), forma y tipografía M3, indicadores de progreso "wavy" (barra de reproducción y volumen), iconografía completa con Material Symbols, nuevo icono de app |
 | 1.2.2   | Edición de etiquetas ID3/FLAC/MP4 con guardado en disco, búsqueda automática de carátula/info (MusicBrainz + Cover Art Archive, respaldo iTunes), fondo de carátula a pantalla completa con blur al ocultar el panel lateral |

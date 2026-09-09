@@ -93,6 +93,12 @@ button.m3-fab:hover {
     box-shadow: 0 2px 6px 2px alpha(black, 0.15), 0 1px 2px alpha(black, 0.30);
 }
 
+/* Icono play/pause más grande que el resto (16px por defecto) para que
+ * destaque dentro del círculo azul del FAB. */
+button.m3-fab image {
+    -gtk-icon-size: 28px;
+}
+
 /* ── Superficies elevadas (elevation level 1) ── */
 
 .card {
@@ -174,37 +180,42 @@ scale slider {
     box-shadow: 0 1px 2px alpha(black, 0.30);
 }
 
-/* ── Indicador de progreso "wavy" M3 (barra de reproducción y volumen) ──
- * Pista inactiva: línea fina plana. Indicador activo: onda repetida,
- * el color exacto del trazo lo aporta wave-light.svg / wave-dark.svg
+/* ── Indicador de progreso "wavy" M3 (Linear progress indicator, variante
+ * with-wave — no el componente "Slider") — medidas exactas de los design
+ * tokens oficiales (material-web, md.comp.progress-indicator.linear.*):
+ *   track-thickness: 4px · active-indicator-thickness: 4px
+ *   wave.amplitude: 3px · wave.wavelength: 40px · with-wave-height: 10px
+ *   track-active-indicator-space: 4px · stop-indicator-size: 4px
+ * El color exacto del trazo lo aporta wave-light.svg / wave-dark.svg
  * (uno por esquema, referenciados desde style-m3-light/dark.css). */
 
 scale.m3-wavy trough {
-    min-height: 12px;
+    min-height: 10px;
     background-color: transparent;
-    /* pista plana (4dp, M3) + "stop indicator": punto fijo en el 100% del recorrido */
+    /* pista inactiva: línea plana de 4px centrada + "stop indicator" (4px) al final */
     background-image:
         radial-gradient(circle, @accent_color 45%, transparent 48%),
         linear-gradient(@surface_variant_color, @surface_variant_color);
-    background-size: 6px 6px, 100% 4px;
+    background-size: 4px 4px, 100% 4px;
     background-repeat: no-repeat, no-repeat;
     background-position: right center, center;
 }
 
 scale.m3-wavy highlight {
-    min-height: 12px;
+    min-height: 10px;
     background-color: transparent;
     background-repeat: repeat-x;
     background-position: left center;
-    background-size: 20px 12px;
+    background-size: 40px 10px;
     border-radius: 0;
-    /* hueco entre el indicador activo y la pista restante (M3: indicator-track gap) */
+    /* hueco entre el indicador activo y la pista restante (M3: track-active-indicator-space) */
     margin-right: 4px;
 }
 
 scale.m3-wavy slider {
-    min-width: 14px;
-    min-height: 14px;
+    /* M3 usa un indicador en forma de línea (stadium), no un punto/círculo */
+    min-width: 4px;
+    min-height: 20px;
 }
 
 /* ── Switches ── */
