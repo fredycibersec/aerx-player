@@ -9,7 +9,7 @@ import threading
 import urllib.parse
 from typing import Callable, Optional
 
-_USER_AGENT = 'RadioES/1.3.2 (+https://github.com/fredycibersec/radioes)'
+_USER_AGENT = 'AERxPlayer/0.9-beta (+https://github.com/fredycibersec/aerx-player)'
 
 try:
     import requests as _requests

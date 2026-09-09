@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# RadioES – construye el paquete .deb
+# ÆRx Player – construye el paquete .deb
 # Uso: bash build-deb.sh
 # Requiere: dpkg-deb (paquete dpkg-dev)
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 
-PKG_NAME="radioes"
-PKG_VERSION="1.3.2"
+PKG_NAME="aerx-player"
+PKG_VERSION="0.99-beta"
 PKG_ARCH="all"
 PKG_FILE="${PKG_NAME}_${PKG_VERSION}_${PKG_ARCH}.deb"
 
 STAGE="${APP_DIR}/dist/.stage/${PKG_NAME}_${PKG_VERSION}"
-INSTALL_DIR="usr/share/radioes"
+INSTALL_DIR="usr/share/aerx-player"
 
 # ── Limpieza previa ──────────────────────────────────────────────────────────
 rm -rf "$STAGE"
@@ -30,10 +30,13 @@ install -d \
     "$STAGE/usr/share/icons/hicolor/128x128/apps" \
     "$STAGE/usr/share/icons/hicolor/64x64/apps"  \
     "$STAGE/usr/share/icons/hicolor/48x48/apps"  \
+    "$STAGE/usr/share/icons/hicolor/32x32/apps"  \
+    "$STAGE/usr/share/icons/hicolor/16x16/apps"  \
+    "$STAGE/usr/share/icons/hicolor/scalable/apps" \
     "$STAGE/usr/share/doc/$PKG_NAME"
 
 # Fuentes Python
-for f in main.py player.py radio_browser.py metadata.py cover_lookup.py update_check.py; do
+for f in main.py player.py radio_browser.py metadata.py cover_lookup.py update_check.py podcasts.py; do
     install -m644 "$APP_DIR/$f" "$STAGE/$INSTALL_DIR/$f"
 done
 
@@ -52,32 +55,34 @@ install -m644 "$APP_DIR"/data/icons/hicolor/scalable/actions/*.svg \
               "$STAGE/$INSTALL_DIR/data/icons/hicolor/scalable/actions/"
 
 # Lanzador en /usr/bin
-cat > "$STAGE/usr/bin/radioes" << 'LAUNCHER'
+cat > "$STAGE/usr/bin/aerx" << 'LAUNCHER'
 #!/usr/bin/env bash
-exec python3 /usr/share/radioes/main.py "$@"
+exec python3 /usr/share/aerx-player/main.py "$@"
 LAUNCHER
-chmod 755 "$STAGE/usr/bin/radioes"
+chmod 755 "$STAGE/usr/bin/aerx"
 
 # Entrada del escritorio
-sed "s|RADIOES_BIN|/usr/bin/radioes|g" "$APP_DIR/radioes.desktop" \
-    > "$STAGE/usr/share/applications/radioes.desktop"
-chmod 644 "$STAGE/usr/share/applications/radioes.desktop"
+sed "s|AERX_BIN|/usr/bin/aerx|g" "$APP_DIR/aerx-player.desktop" \
+    > "$STAGE/usr/share/applications/aerx-player.desktop"
+chmod 644 "$STAGE/usr/share/applications/aerx-player.desktop"
 
-# Iconos
-for SIZE in 48 64 128 256 512; do
-    install -m644 "$APP_DIR/data/icons/radioes-${SIZE}.png" \
-        "$STAGE/usr/share/icons/hicolor/${SIZE}x${SIZE}/apps/radioes.png"
+# Iconos (icono de app ÆRx Player, ver assets/branding/aerx-player-icon.svg)
+for SIZE in 16 32 48 64 128 256 512; do
+    install -m644 "$APP_DIR/data/icons/hicolor/${SIZE}x${SIZE}/apps/aerx-player.png" \
+        "$STAGE/usr/share/icons/hicolor/${SIZE}x${SIZE}/apps/aerx-player.png"
 done
+install -m644 "$APP_DIR/data/icons/hicolor/scalable/apps/aerx-player.svg" \
+    "$STAGE/usr/share/icons/hicolor/scalable/apps/aerx-player.svg"
 
 # Copyright mínimo
 cat > "$STAGE/usr/share/doc/$PKG_NAME/copyright" << 'COPYRIGHT'
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: radioes
-Upstream-Contact: alfredo.ramirez@nologin.es
+Upstream-Name: aerx-player
+Upstream-Contact: sarumanthegrey@proton.me
 
 Files: *
-Copyright: 2026 Alfredo Ramirez <alfredo.ramirez@nologin.es>
-License: MIT
+Copyright: 2026 SaruMan <sarumanthegrey@proton.me>
+License: GPL-3.0
 COPYRIGHT
 
 # ── DEBIAN/control ───────────────────────────────────────────────────────────
@@ -87,7 +92,7 @@ cat > "$STAGE/DEBIAN/control" << EOF
 Package: ${PKG_NAME}
 Version: ${PKG_VERSION}
 Architecture: ${PKG_ARCH}
-Maintainer: Alfredo Ramirez <alfredo.ramirez@nologin.es>
+Maintainer: SaruMan <sarumanthegrey@proton.me>
 Installed-Size: ${INSTALLED_KB}
 Depends: python3 (>= 3.10),
  python3-gi,
@@ -99,32 +104,36 @@ Depends: python3 (>= 3.10),
  gir1.2-gdkpixbuf-2.0,
  gstreamer1.0-plugins-base,
  gstreamer1.0-plugins-good,
- python3-requests
+ python3-requests,
+ fonts-inter
 Recommends: gstreamer1.0-plugins-bad,
  gstreamer1.0-plugins-ugly,
  gstreamer1.0-libav,
  python3-mutagen
 Section: sound
 Priority: optional
-Description: Radio española online y reproductor MP3
- Aplicación GTK4/Adwaita para escuchar emisoras de radio españolas
- en línea y reproducir archivos de audio locales (MP3, FLAC, OGG, AAC).
+Description: Radio online, podcasts y reproductor de audio local
+ Aplicación GTK4/Adwaita (Material Design 3) para escuchar emisoras de
+ radio españolas en línea, suscribirte a podcasts y reproducir archivos
+ de audio locales (MP3, FLAC, OGG, AAC, M4A, WAV, OPUS).
  .
  Incluye más de 20 emisoras preconfiguradas (RNE, SER, Cadena 100,
- Rock FM, Los 40, Cadena Dial, Café del Mar…) y descubrimiento de
- nuevas emisoras mediante la API de Radio Browser.
+ Rock FM, Los 40, Cadena Dial, Café del Mar…), descubrimiento de
+ nuevas emisoras mediante la API de Radio Browser y búsqueda/descarga
+ de podcasts vía iTunes Search API.
  .
  Características:
+  - Podcasts: búsqueda, suscripción y descarga de episodios
+  - Edición de etiquetas ID3/FLAC/MP4 y búsqueda automática de carátula
   - Lista de emisoras por géneros colapsables con sección de Favoritas
   - Añadir emisoras manualmente; exportar e importar favoritos en JSON
   - Sleep timer configurable (15/30/60/90 min)
   - Notificaciones de escritorio al cambiar el tema en radio
   - Atajos de teclado: Espacio=play/pause, ←/→=anterior/siguiente, M=mute
   - Ordenar lista MP3 por nombre, título, artista o álbum
-  - Visualizador de espectro tipo campana de Gauss con gradiente de color
+  - Visualizador de espectro multi-modo (6 estilos)
   - Caché persistente de lista MP3 y carpeta configurable con escaneo recursivo
   - Interfaz responsiva con panel lateral adaptable (Adw.OverlaySplitView)
-  - Carátulas, metadatos ICY y lectura de etiquetas ID3/FLAC/MP4
 EOF
 
 # ── DEBIAN/postinst ───────────────────────────────────────────────────────────

@@ -1,10 +1,10 @@
-"""Check GitHub Releases for a newer RadioES version."""
+"""Check GitHub Releases for a newer ÆRx Player version."""
 
 import json
 import threading
 from typing import Callable
 
-_USER_AGENT = 'RadioES-UpdateCheck/1.0 (+https://github.com/fredycibersec/radioes)'
+_USER_AGENT = 'AERxPlayer-UpdateCheck/1.0 (+https://github.com/fredycibersec/aerx-player)'
 
 try:
     import requests as _requests
@@ -24,7 +24,7 @@ except ImportError:
             return json.loads(r.read())
 
 
-GITHUB_REPO       = 'fredycibersec/radioes'
+GITHUB_REPO       = 'fredycibersec/aerx-player'
 RELEASES_API_URL  = f'https://api.github.com/repos/{GITHUB_REPO}/releases/latest'
 RELEASES_PAGE_URL = f'https://github.com/{GITHUB_REPO}/releases/latest'
 

@@ -1,10 +1,14 @@
-/* RadioES — Material Design 3, capa base (forma / tipografía / elevación / estados)
+/* ÆRx Player — Material Design 3, capa base (forma / tipografía / elevación / estados)
  * Independiente de esquema claro/oscuro: sólo referencia los @define-color
  * que aportan style-m3-light.css / style-m3-dark.css, así que no necesita
  * recargarse al cambiar de tema. */
 
 window {
-    font-family: 'Roboto', 'Google Sans Text', 'Noto Sans', sans-serif;
+    /* Inter es la tipografía de marca; si no está instalada en el sistema
+     * (no viene por defecto en la mayoría de distros), cae a las mismas
+     * grotescas neutras que ya usaba la app — misma altura x, sin salto
+     * visual brusco. */
+    font-family: 'Inter', 'Roboto', 'Google Sans Text', 'Noto Sans', sans-serif;
 }
 
 /* ── Escala tipográfica M3 (roles ya usados por la app como clases) ── */
@@ -70,11 +74,11 @@ button.suggested-action {
 }
 
 button.suggested-action:hover {
-    background-color: mix(@accent_bg_color, @accent_fg_color, 0.92);
+    background-color: mix(@accent_bg_color, @accent_fg_color, 0.08);
 }
 
 button.suggested-action:active {
-    background-color: mix(@accent_bg_color, @accent_fg_color, 0.88);
+    background-color: mix(@accent_bg_color, @accent_fg_color, 0.12);
 }
 
 button.destructive-action {
@@ -108,6 +112,46 @@ button.m3-fab image {
     box-shadow: 0 1px 2px alpha(black, 0.30), 0 1px 3px 1px alpha(black, 0.15);
 }
 
+/* ── Station "art" block inside a Home grid .card: a full-bleed colour
+   chip (deterministic per station) with the logo centered on it, echoing
+   the coloured cover tiles in the ÆRx brand mockup. ── */
+
+.m3-card-art {
+    min-height: 96px;
+}
+
+.m3-card-art image {
+    color: #FFFFFF;
+    opacity: 0.95;
+    -gtk-icon-shadow: 0 1px 3px alpha(black, 0.35);
+}
+
+.m3-card-art-1 { background-color: #C2255C; }
+.m3-card-art-2 { background-color: #3E4C6D; }
+.m3-card-art-3 { background-color: #0E7C5A; }
+.m3-card-art-4 { background-color: #7C3AED; }
+.m3-card-art-5 { background-color: #0891B2; }
+.m3-card-art-6 { background-color: #C2410C; }
+
+/* ── Banner "hero" de Inicio: texto blanco fijo, ilegible-proof sobre la
+   imagen degradada sin importar el tema claro/oscuro de la app. ── */
+
+.m3-hero-title {
+    color: #FFFFFF;
+    text-shadow: 0 1px 6px alpha(black, 0.5);
+}
+
+.m3-hero-subtitle {
+    color: alpha(#FFFFFF, 0.88);
+    text-shadow: 0 1px 4px alpha(black, 0.45);
+}
+
+/* Wordmark "ÆRx" del logo sobre el hero: título-2 (~20px) x1.5. */
+.m3-hero-logo-text {
+    font-size: 30px;
+    font-weight: 800;
+}
+
 /* ── Listas ("boxed-list" → superficie contenedora M3) ── */
 
 list.boxed-list {
@@ -128,6 +172,33 @@ list.boxed-list row:hover {
 
 list.boxed-list row:selected {
     background-color: alpha(@accent_color, 0.12);
+}
+
+/* ── Rail de navegación (M3 navigation-rail: item = "pill" activo) ── */
+
+list.navigation-sidebar {
+    background-color: transparent;
+    padding: 4px 8px;
+}
+
+list.navigation-sidebar row {
+    border-radius: 9999px;
+    margin: 2px 0;
+    transition: background-color 150ms ease;
+}
+
+list.navigation-sidebar row:hover {
+    background-color: alpha(@accent_color, 0.08);
+}
+
+list.navigation-sidebar row:selected {
+    background-color: @accent_color;
+    color: @accent_fg_color;
+}
+
+list.navigation-sidebar row:selected image,
+list.navigation-sidebar row:selected label {
+    color: @accent_fg_color;
 }
 
 /* ── Chips (M3 assist chip, p.ej. badge de bitrate) ── */

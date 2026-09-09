@@ -28,17 +28,17 @@ jobs:
       - name: Upload .deb as release asset
         uses: softprops/action-gh-release@v2
         with:
-          name: "RadioES ${{ github.ref_name }}"
+          name: "ÆRx Player ${{ github.ref_name }}"
           body: |
             ## Instalación
 
             Descarga el archivo `.deb` y ejecuta:
 
             ```bash
-            sudo apt install ./radioes_${{ steps.version.outputs.VERSION }}_all.deb
+            sudo apt install ./aerx-player_${{ steps.version.outputs.VERSION }}_all.deb
             ```
 
             Consulta el [README](https://github.com/${{ github.repository }}#readme) para más información.
-          files: dist/radioes_${{ steps.version.outputs.VERSION }}_all.deb
+          files: dist/aerx-player_${{ steps.version.outputs.VERSION }}_all.deb
           draft: false
           prerelease: false

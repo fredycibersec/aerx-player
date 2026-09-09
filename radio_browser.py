@@ -7,7 +7,7 @@ from typing import Callable, Optional
 try:
     import requests as _requests
     _SESSION = _requests.Session()
-    _SESSION.headers['User-Agent'] = 'RadioES/1.0 (GTK4 Linux; github.com/radioes)'
+    _SESSION.headers['User-Agent'] = 'AERxPlayer/0.9-beta (GTK4 Linux; github.com/fredycibersec/aerx-player)'
     def _get_json(url, **kw):
         r = _SESSION.get(url, timeout=10, **kw)
         r.raise_for_status()

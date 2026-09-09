@@ -1,28 +1,29 @@
-/* RadioES — Material Design 3, esquema claro
- * Paleta tonal derivada del seed #0F74BD ("Azul difusión/radio").
+/* ÆRx Player — Material Design 3, esquema claro
+ * Paleta de marca ÆRx:
+ * primario #3B82F6, secundario #8B5CF6, acento #06B6D4.
  * Redefine los colores con nombre de libadwaita + roles M3 propios,
  * consumidos por style-m3-base.css. */
 
-@define-color accent_color            #0F74BD;
-@define-color accent_bg_color         #0F74BD;
+@define-color accent_color            #3B82F6;
+@define-color accent_bg_color         #3B82F6;
 @define-color accent_fg_color         #FFFFFF;
 
-@define-color destructive_color       #B3261E;
-@define-color destructive_bg_color    #B3261E;
+@define-color destructive_color       #EF4444;
+@define-color destructive_bg_color    #EF4444;
 @define-color destructive_fg_color    #FFFFFF;
-@define-color error_color             #B3261E;
-@define-color error_bg_color          #B3261E;
+@define-color error_color             #EF4444;
+@define-color error_bg_color          #EF4444;
 @define-color error_fg_color          #FFFFFF;
 
 @define-color success_color           #146C2E;
-@define-color success_bg_color        #146C2E;
+@define-color success_bg_color        #22C55E;
 @define-color success_fg_color        #FFFFFF;
 
 @define-color warning_color           #7A5900;
-@define-color warning_bg_color        #FFB300;
+@define-color warning_bg_color        #F59E0B;
 @define-color warning_fg_color        #402D00;
 
-@define-color window_bg_color         #FAFAFA;
+@define-color window_bg_color         #F8FAFC;
 @define-color window_fg_color         #191A1A;
 @define-color view_bg_color           #FFFFFF;
 @define-color view_fg_color           #191A1A;
@@ -62,10 +63,10 @@
 @define-color secondary_container_color     #E1E6EA;
 @define-color on_secondary_container_color  #161A1D;
 
-@define-color tertiary_color                 #614587;
+@define-color tertiary_color                 #8B5CF6;
 @define-color on_tertiary_color               #FFFFFF;
-@define-color tertiary_container_color        #E4DFEC;
-@define-color on_tertiary_container_color     #19151E;
+@define-color tertiary_container_color        #EDE9FE;
+@define-color on_tertiary_container_color     #2E1065;
 
 /* Indicador de progreso "wavy" (ver style-m3-base.css) */
 scale.m3-wavy highlight {
