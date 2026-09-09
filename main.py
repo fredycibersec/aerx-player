@@ -1618,7 +1618,7 @@ class RadioWindow(Adw.ApplicationWindow):
         hero_text.set_halign(Gtk.Align.START)
         hero_text.set_margin_start(20); hero_text.set_margin_bottom(16)
 
-        greeting = Gtk.Label(label='Buenas escuchas')
+        greeting = Gtk.Label(label='Buenas vibras')
         greeting.add_css_class('title-1')
         greeting.add_css_class('m3-hero-title')
         greeting.set_xalign(0)
