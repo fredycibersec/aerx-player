@@ -28,7 +28,7 @@ import metadata as meta_mod
 
 Gst.init(None)
 
-APP_VERSION = '1.3.1'
+APP_VERSION = '1.3.2'
 
 DATA_DIR      = Path(__file__).parent / 'data'
 STATIONS_FILE = DATA_DIR / 'spanish_stations.json'
@@ -71,7 +71,11 @@ def _placeholder_pixbuf(icon_name: str, size: int = 64) -> GdkPixbuf.Pixbuf | No
 
 # ── Fullscreen cover background (blur + oscurecido) ────────────────────────────
 
-_FULLSCREEN_MIN_SIDE = 500   # lado menor mínimo (px) para activar el fondo a pantalla completa
+_FULLSCREEN_MIN_SIDE = 150   # lado menor mínimo (px) para activar el fondo a pantalla completa
+                              # (los favicons reales de emisoras rara vez superan 180-192px —p.ej.
+                              # apple-touch-icon-192x192—, así que un umbral de 500px no se
+                              # cumplía casi nunca; al ir siempre desenfocado, una fuente más
+                              # pequeña sigue quedando bien)
 _COVER_BLUR_FACTOR    = 5    # downscale por pasada (pirámide iterativa, no un solo salto agresivo)
 _COVER_BLUR_PASSES    = 5    # nº de pasadas de downscale+upscale acumulativas
 

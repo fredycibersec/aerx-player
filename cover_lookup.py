@@ -9,7 +9,7 @@ import threading
 import urllib.parse
 from typing import Callable, Optional
 
-_USER_AGENT = 'RadioES/1.3.1 (+https://github.com/fredycibersec/radioes)'
+_USER_AGENT = 'RadioES/1.3.2 (+https://github.com/fredycibersec/radioes)'
 
 try:
     import requests as _requests
