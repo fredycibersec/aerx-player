@@ -5,6 +5,7 @@ Name=ÆRx Player
 GenericName=Radio y Audio
 Comment=Radio online y reproductor de archivos de audio locales
 Exec=AERX_BIN
+TryExec=AERX_BIN
 Icon=aerx-player
 Terminal=false
 Categories=AudioVideo;Audio;Player;Music;

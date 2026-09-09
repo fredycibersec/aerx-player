@@ -4,24 +4,49 @@ el callback se llama tal cual desde el hilo worker — quien toca widgets
 GTK debe envolverlo en GLib.idle_add por su cuenta."""
 
 import json
+import os
 import threading
-import xml.etree.ElementTree as ET
 from typing import Callable, Optional
+
+try:
+    from defusedxml import ElementTree as ET
+except ImportError:
+    # defusedxml es recomendable (protege contra entidades XML maliciosas en
+    # un feed RSS), pero no es estrictamente necesario en Python 3.10+ (expat
+    # moderno ya mitiga la expansión de entidades) — se degrada con gracia
+    # igual que el resto de dependencias opcionales del proyecto.
+    import xml.etree.ElementTree as ET
+
+# Topes generosos: evitan que una API/feed/servidor de audio comprometido (o
+# uno que simplemente mienta en Content-Length) agote memoria o disco.
+_MAX_BYTES = 15 * 1024 * 1024            # 15 MB — JSON de búsqueda y feeds RSS
+_MAX_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB — episodio de audio
 
 try:
     import requests as _requests
     _SESSION = _requests.Session()
     _SESSION.headers['User-Agent'] = 'AERxPlayer/0.9-beta (GTK4 Linux; github.com/fredycibersec/aerx-player)'
 
+    def _read_capped(r, max_bytes=_MAX_BYTES):
+        total = 0
+        chunks = []
+        for chunk in r.iter_content(chunk_size=65536):
+            total += len(chunk)
+            if total > max_bytes:
+                raise ValueError(f'respuesta demasiado grande (> {max_bytes} bytes)')
+            chunks.append(chunk)
+        return b''.join(chunks)
+
     def _get_json(url, params=None):
-        r = _SESSION.get(url, params=params, timeout=10)
+        r = _SESSION.get(url, params=params, timeout=10, stream=True)
         r.raise_for_status()
-        return r.json()
+        return json.loads(_read_capped(r))
 
     def _get_text(url):
-        r = _SESSION.get(url, timeout=15)
+        r = _SESSION.get(url, timeout=15, stream=True)
         r.raise_for_status()
-        return r.text
+        raw = _read_capped(r)
+        return raw.decode(r.encoding or r.apparent_encoding or 'utf-8', errors='replace')
 
     def _stream_download(url, dest_path, progress_cb, cancel_event):
         with _SESSION.get(url, stream=True, timeout=20) as r:
@@ -34,8 +59,10 @@ try:
                         raise InterruptedError('cancelado')
                     if not chunk:
                         continue
-                    f.write(chunk)
                     done += len(chunk)
+                    if done > _MAX_DOWNLOAD_BYTES:
+                        raise ValueError(f'descarga demasiado grande (> {_MAX_DOWNLOAD_BYTES} bytes)')
+                    f.write(chunk)
                     if progress_cb:
                         progress_cb(done, total)
 except ImportError:
@@ -46,12 +73,18 @@ except ImportError:
             url += '?' + urllib.parse.urlencode(params)
         req = urllib.request.Request(url, headers={'User-Agent': 'AERxPlayer/0.9-beta'})
         with urllib.request.urlopen(req, timeout=10) as r:
-            return json.loads(r.read())
+            raw = r.read(_MAX_BYTES + 1)
+            if len(raw) > _MAX_BYTES:
+                raise ValueError(f'respuesta demasiado grande (> {_MAX_BYTES} bytes)')
+            return json.loads(raw)
 
     def _get_text(url):
         req = urllib.request.Request(url, headers={'User-Agent': 'AERxPlayer/0.9-beta'})
         with urllib.request.urlopen(req, timeout=15) as r:
-            return r.read().decode('utf-8', errors='replace')
+            raw = r.read(_MAX_BYTES + 1)
+            if len(raw) > _MAX_BYTES:
+                raise ValueError(f'respuesta demasiado grande (> {_MAX_BYTES} bytes)')
+            return raw.decode('utf-8', errors='replace')
 
     def _stream_download(url, dest_path, progress_cb, cancel_event):
         req = urllib.request.Request(url, headers={'User-Agent': 'AERxPlayer/0.9-beta'})
@@ -65,8 +98,10 @@ except ImportError:
                     chunk = r.read(65536)
                     if not chunk:
                         break
-                    f.write(chunk)
                     done += len(chunk)
+                    if done > _MAX_DOWNLOAD_BYTES:
+                        raise ValueError(f'descarga demasiado grande (> {_MAX_DOWNLOAD_BYTES} bytes)')
+                    f.write(chunk)
                     if progress_cb:
                         progress_cb(done, total)
 
@@ -203,7 +238,18 @@ def download_episode(url: str, dest_path: str, callback: Callable,
             _stream_download(url, dest_path, progress_cb, cancel_event)
             callback(dest_path, None)
         except InterruptedError:
+            _remove_partial(dest_path)
             callback(None, 'cancelado')
         except Exception as exc:
+            _remove_partial(dest_path)
             callback(None, str(exc))
     _run(_work)
+
+
+def _remove_partial(dest_path: str) -> None:
+    """Borra el fichero parcial que deja una descarga cancelada o abortada
+    (p.ej. por superar el tope de tamaño) para no dejar basura en disco."""
+    try:
+        os.remove(dest_path)
+    except OSError:
+        pass

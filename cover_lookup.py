@@ -5,29 +5,44 @@ Fallback: iTunes Search API, used when MusicBrainz has no match or no cover.
 """
 
 import json
+import re
 import threading
 import urllib.parse
 from typing import Callable, Optional
 
 _USER_AGENT = 'AERxPlayer/0.9-beta (+https://github.com/fredycibersec/aerx-player)'
 
+# Tope generoso para JSON de metadata y carátulas — evita que una API de
+# terceros comprometida (o un MITM) agote memoria con una respuesta enorme.
+_MAX_BYTES = 15 * 1024 * 1024  # 15 MB
+
 try:
     import requests as _requests
     _SESSION = _requests.Session()
     _SESSION.headers['User-Agent'] = _USER_AGENT
 
+    def _read_capped(r, max_bytes=_MAX_BYTES):
+        total = 0
+        chunks = []
+        for chunk in r.iter_content(chunk_size=65536):
+            total += len(chunk)
+            if total > max_bytes:
+                raise ValueError(f'respuesta demasiado grande (> {max_bytes} bytes)')
+            chunks.append(chunk)
+        return b''.join(chunks)
+
     def _get_json(url, params=None):
-        r = _SESSION.get(url, params=params, timeout=10)
+        r = _SESSION.get(url, params=params, timeout=10, stream=True)
         r.raise_for_status()
-        return r.json()
+        return json.loads(_read_capped(r))
 
     def _get_raw(url):
-        r = _SESSION.get(url, timeout=10)
+        r = _SESSION.get(url, timeout=10, stream=True)
         r.raise_for_status()
         ct = r.headers.get('Content-Type', '')
         if 'text/html' in ct or 'text/xml' in ct:
             raise ValueError(f"URL returned {ct}, not an image")
-        return r.content, ct
+        return _read_capped(r), ct
 except ImportError:
     import urllib.request
 
@@ -36,7 +51,10 @@ except ImportError:
             url += '?' + urllib.parse.urlencode(params)
         req = urllib.request.Request(url, headers={'User-Agent': _USER_AGENT})
         with urllib.request.urlopen(req, timeout=10) as r:
-            return json.loads(r.read())
+            raw = r.read(_MAX_BYTES + 1)
+            if len(raw) > _MAX_BYTES:
+                raise ValueError(f'respuesta demasiado grande (> {_MAX_BYTES} bytes)')
+            return json.loads(raw)
 
     def _get_raw(url):
         req = urllib.request.Request(url, headers={'User-Agent': _USER_AGENT})
@@ -44,7 +62,10 @@ except ImportError:
             ct = r.headers.get('Content-Type', '')
             if 'text/html' in ct:
                 raise ValueError("URL returned HTML, not an image")
-            return r.read(), ct
+            raw = r.read(_MAX_BYTES + 1)
+            if len(raw) > _MAX_BYTES:
+                raise ValueError(f'respuesta demasiado grande (> {_MAX_BYTES} bytes)')
+            return raw, ct
 
 
 MUSICBRAINZ_BASE  = 'https://musicbrainz.org/ws/2'
@@ -56,15 +77,26 @@ def _run(fn, *args):
     threading.Thread(target=fn, args=args, daemon=True).start()
 
 
+_LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}\[\]^"~*?:\\/])')
+
+
+def _escape_lucene(s: str) -> str:
+    """Escapa caracteres reservados de la sintaxis de búsqueda Lucene que usa
+    la API de MusicBrainz. Sin esto, una comilla suelta en un tag ID3 real
+    (título/artista/álbum) rompe la frase entrecomillada y corrompe la query
+    en silencio (búsqueda vacía o resultados erróneos, sin error visible)."""
+    return _LUCENE_SPECIAL.sub(r'\\\1', s)
+
+
 def _musicbrainz_lookup(artist: str, title: str, album: str):
     """Return (info_dict, release_mbid) from the best-scoring recording, or (None, None)."""
     parts = []
     if title:
-        parts.append(f'recording:"{title}"')
+        parts.append(f'recording:"{_escape_lucene(title)}"')
     if artist:
-        parts.append(f'artist:"{artist}"')
+        parts.append(f'artist:"{_escape_lucene(artist)}"')
     if album:
-        parts.append(f'release:"{album}"')
+        parts.append(f'release:"{_escape_lucene(album)}"')
     if not parts:
         return None, None
 

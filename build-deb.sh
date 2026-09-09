@@ -109,7 +109,8 @@ Depends: python3 (>= 3.10),
 Recommends: gstreamer1.0-plugins-bad,
  gstreamer1.0-plugins-ugly,
  gstreamer1.0-libav,
- python3-mutagen
+ python3-mutagen,
+ python3-defusedxml
 Section: sound
 Priority: optional
 Description: Radio online, podcasts y reproductor de audio local

@@ -21,8 +21,8 @@ sudo apt-get install -y \
 
 # ── 2. Dependencias Python ───────────────────────────────────────────────────
 echo "==> Instalando dependencias Python…"
-pip3 install --user --break-system-packages mutagen requests 2>/dev/null \
-  || pip3 install --user mutagen requests
+pip3 install --user --break-system-packages mutagen requests defusedxml 2>/dev/null \
+  || pip3 install --user mutagen requests defusedxml
 
 # ── 3. Binario ejecutable ────────────────────────────────────────────────────
 chmod +x "$BINARY"

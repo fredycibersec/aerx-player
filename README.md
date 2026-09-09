@@ -127,6 +127,7 @@ El workflow de CI/CD en `.github/workflows/build-release.yml` construye y public
 | `gstreamer1.0-plugins-*`         | Codecs MP3, AAC, Vorbis, etc.  |
 | `python3-requests` *(o pip)*     | Descarga de emisoras/logos/podcasts |
 | `python3-mutagen` *(opcional)*   | Lectura de metadatos MP3/FLAC  |
+| `python3-defusedxml` *(opcional)* | Parseo seguro de feeds RSS de podcasts |
 
 ---
 

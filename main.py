@@ -2882,6 +2882,7 @@ class RadioWindow(Adw.ApplicationWindow):
         if self._sleep_timer_id:
             GLib.source_remove(self._sleep_timer_id)
         self._save_mp3_cache_sync()
+        self._player.dispose()
         return False  # allow the window to close
 
     def _collect_mp3_rows(self) -> list:
