@@ -161,8 +161,6 @@ aerx-player/
 |-------------|-------------------|
 | 0.99-beta   | **Relanzamiento como ÆRx Player** (antes RadioES): nueva identidad de marca e iconografía, soporte de **podcasts** (búsqueda, suscripción y descarga de episodios), y últimos ajustes de estilo Material Design 3 en los controles de reproducción. Última beta antes de la **1.0**. |
 
-> El historial de versiones 1.0.0–1.3.2 bajo el nombre RadioES puede consultarse en las [releases anteriores](../../releases) del repositorio.
-
 ---
 
 ## Compatibilidad
