@@ -1,0 +1,73 @@
+/* ÆRx Player — esquema de color "Kanagawa" (oscuro).
+ * Generado a partir de la paleta oficial del tema, mapeada a los
+ * roles M3/libadwaita usados por style-m3-base.css. */
+
+@define-color accent_color    #7E9CD8;
+@define-color accent_bg_color #7E9CD8;
+@define-color accent_fg_color #1F1F28;
+
+@define-color destructive_color    #C34043;
+@define-color destructive_bg_color #C34043;
+@define-color destructive_fg_color #DCD7BA;
+
+@define-color error_color    #C34043;
+@define-color error_bg_color #C34043;
+@define-color error_fg_color #DCD7BA;
+
+@define-color success_color    #76946A;
+@define-color success_bg_color #76946A;
+@define-color success_fg_color #DCD7BA;
+
+@define-color warning_color    #DCA561;
+@define-color warning_bg_color #DCA561;
+@define-color warning_fg_color #1F1F28;
+
+@define-color window_bg_color #1F1F28;
+@define-color window_fg_color #DCD7BA;
+
+@define-color view_bg_color #16161D;
+@define-color view_fg_color #DCD7BA;
+
+@define-color headerbar_bg_color           #2A2A37;
+@define-color headerbar_fg_color           #DCD7BA;
+@define-color headerbar_border_color       #363646;
+@define-color headerbar_backdrop_color     #16161D;
+@define-color headerbar_shade_color        rgba(0,0,0,0.28);
+@define-color headerbar_darker_shade_color rgba(0,0,0,0.42);
+
+@define-color card_bg_color    #2A2A37;
+@define-color card_fg_color    #DCD7BA;
+@define-color card_shade_color rgba(0,0,0,0.20);
+
+@define-color dialog_bg_color #2A2A37;
+@define-color dialog_fg_color #DCD7BA;
+
+@define-color popover_bg_color    #2A2A37;
+@define-color popover_fg_color    #DCD7BA;
+@define-color popover_shade_color rgba(0,0,0,0.20);
+
+@define-color shade_color             rgba(0,0,0,0.28);
+@define-color scrollbar_outline_color rgba(0,0,0,0.5);
+
+@define-color sidebar_bg_color       #2A2A37;
+@define-color sidebar_fg_color       #DCD7BA;
+@define-color sidebar_backdrop_color #16161D;
+@define-color sidebar_shade_color    rgba(0,0,0,0.20);
+@define-color sidebar_border_color   #363646;
+
+@define-color outline               #727169;
+@define-color outline_variant       #363646;
+@define-color surface_variant_color #2A2A37;
+
+@define-color secondary_container_color    #363646;
+@define-color on_secondary_container_color #D27E99;
+
+@define-color tertiary_color              #957FB8;
+@define-color on_tertiary_color           #1F1F28;
+@define-color tertiary_container_color    #363646;
+@define-color on_tertiary_container_color #D27E99;
+
+/* Indicador de progreso "wavy" (ver style-m3-base.css) */
+scale.m3-wavy highlight {
+    background-image: url("wave-kanagawa.svg");
+}

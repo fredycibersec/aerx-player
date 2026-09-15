@@ -1,0 +1,73 @@
+/* ÆRx Player — esquema de color "Gruvbox Light" (claro).
+ * Generado a partir de la paleta oficial del tema, mapeada a los
+ * roles M3/libadwaita usados por style-m3-base.css. */
+
+@define-color accent_color    #AF3A03;
+@define-color accent_bg_color #AF3A03;
+@define-color accent_fg_color #FBF1C7;
+
+@define-color destructive_color    #9D0006;
+@define-color destructive_bg_color #9D0006;
+@define-color destructive_fg_color #FBF1C7;
+
+@define-color error_color    #9D0006;
+@define-color error_bg_color #9D0006;
+@define-color error_fg_color #FBF1C7;
+
+@define-color success_color    #79740E;
+@define-color success_bg_color #79740E;
+@define-color success_fg_color #FBF1C7;
+
+@define-color warning_color    #B57614;
+@define-color warning_bg_color #B57614;
+@define-color warning_fg_color #FBF1C7;
+
+@define-color window_bg_color #FBF1C7;
+@define-color window_fg_color #3C3836;
+
+@define-color view_bg_color #F9F5D7;
+@define-color view_fg_color #3C3836;
+
+@define-color headerbar_bg_color           #EBDBB2;
+@define-color headerbar_fg_color           #3C3836;
+@define-color headerbar_border_color       #D5C4A1;
+@define-color headerbar_backdrop_color     #FFFFFF;
+@define-color headerbar_shade_color        rgba(0,0,0,0.07);
+@define-color headerbar_darker_shade_color rgba(0,0,0,0.15);
+
+@define-color card_bg_color    #EBDBB2;
+@define-color card_fg_color    #3C3836;
+@define-color card_shade_color rgba(0,0,0,0.06);
+
+@define-color dialog_bg_color #EBDBB2;
+@define-color dialog_fg_color #3C3836;
+
+@define-color popover_bg_color    #EBDBB2;
+@define-color popover_fg_color    #3C3836;
+@define-color popover_shade_color rgba(0,0,0,0.06);
+
+@define-color shade_color             rgba(0,0,0,0.07);
+@define-color scrollbar_outline_color rgba(255,255,255,0.6);
+
+@define-color sidebar_bg_color       #EBDBB2;
+@define-color sidebar_fg_color       #3C3836;
+@define-color sidebar_backdrop_color #FFFFFF;
+@define-color sidebar_shade_color    rgba(0,0,0,0.06);
+@define-color sidebar_border_color   #D5C4A1;
+
+@define-color outline               #7C6F64;
+@define-color outline_variant       #D5C4A1;
+@define-color surface_variant_color #EBDBB2;
+
+@define-color secondary_container_color    #D5C4A1;
+@define-color on_secondary_container_color #8F3F71;
+
+@define-color tertiary_color              #8F3F71;
+@define-color on_tertiary_color           #FBF1C7;
+@define-color tertiary_container_color    #D5C4A1;
+@define-color on_tertiary_container_color #8F3F71;
+
+/* Indicador de progreso "wavy" (ver style-m3-base.css) */
+scale.m3-wavy highlight {
+    background-image: url("wave-gruvbox-light.svg");
+}

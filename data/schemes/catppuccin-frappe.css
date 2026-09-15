@@ -1,0 +1,73 @@
+/* ÆRx Player — esquema de color "Catppuccin Frappé" (oscuro).
+ * Generado a partir de la paleta oficial del tema, mapeada a los
+ * roles M3/libadwaita usados por style-m3-base.css. */
+
+@define-color accent_color    #8CAAEE;
+@define-color accent_bg_color #8CAAEE;
+@define-color accent_fg_color #232634;
+
+@define-color destructive_color    #E78284;
+@define-color destructive_bg_color #E78284;
+@define-color destructive_fg_color #232634;
+
+@define-color error_color    #E78284;
+@define-color error_bg_color #E78284;
+@define-color error_fg_color #232634;
+
+@define-color success_color    #A6D189;
+@define-color success_bg_color #A6D189;
+@define-color success_fg_color #232634;
+
+@define-color warning_color    #E5C890;
+@define-color warning_bg_color #E5C890;
+@define-color warning_fg_color #232634;
+
+@define-color window_bg_color #303446;
+@define-color window_fg_color #C6D0F5;
+
+@define-color view_bg_color #232634;
+@define-color view_fg_color #C6D0F5;
+
+@define-color headerbar_bg_color           #414559;
+@define-color headerbar_fg_color           #C6D0F5;
+@define-color headerbar_border_color       #51576D;
+@define-color headerbar_backdrop_color     #232634;
+@define-color headerbar_shade_color        rgba(0,0,0,0.28);
+@define-color headerbar_darker_shade_color rgba(0,0,0,0.42);
+
+@define-color card_bg_color    #414559;
+@define-color card_fg_color    #C6D0F5;
+@define-color card_shade_color rgba(0,0,0,0.20);
+
+@define-color dialog_bg_color #414559;
+@define-color dialog_fg_color #C6D0F5;
+
+@define-color popover_bg_color    #414559;
+@define-color popover_fg_color    #C6D0F5;
+@define-color popover_shade_color rgba(0,0,0,0.20);
+
+@define-color shade_color             rgba(0,0,0,0.28);
+@define-color scrollbar_outline_color rgba(0,0,0,0.5);
+
+@define-color sidebar_bg_color       #414559;
+@define-color sidebar_fg_color       #C6D0F5;
+@define-color sidebar_backdrop_color #232634;
+@define-color sidebar_shade_color    rgba(0,0,0,0.20);
+@define-color sidebar_border_color   #51576D;
+
+@define-color outline               #838BA7;
+@define-color outline_variant       #51576D;
+@define-color surface_variant_color #414559;
+
+@define-color secondary_container_color    #51576D;
+@define-color on_secondary_container_color #CA9EE6;
+
+@define-color tertiary_color              #CA9EE6;
+@define-color on_tertiary_color           #232634;
+@define-color tertiary_container_color    #51576D;
+@define-color on_tertiary_container_color #CA9EE6;
+
+/* Indicador de progreso "wavy" (ver style-m3-base.css) */
+scale.m3-wavy highlight {
+    background-image: url("wave-catppuccin-frappe.svg");
+}

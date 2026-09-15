@@ -2,12 +2,12 @@
 
 ## Versiones soportadas
 
-ÆRx Player está en fase **0.99-beta2**, última beta antes del lanzamiento estable **1.0**. Solo la última versión publicada recibe correcciones de seguridad.
+ÆRx Player está en fase **0.99-beta3**, última beta antes del lanzamiento estable **1.0**. Solo la última versión publicada recibe correcciones de seguridad.
 
 | Versión      | Soportada |
 |--------------|-----------|
-| 0.99-beta2   | ✅ |
-| < 0.99-beta2 (RadioES 1.x, 0.99-beta) | ❌ |
+| 0.99-beta3   | ✅ |
+| < 0.99-beta3 (RadioES 1.x, 0.99-beta, 0.99-beta2) | ❌ |
 
 ## Reportar una vulnerabilidad
 

@@ -35,7 +35,7 @@ import metadata as meta_mod
 
 Gst.init(None)
 
-APP_VERSION = '0.99-beta2'
+APP_VERSION = '0.99-beta3'
 KOFI_URL    = 'https://ko-fi.com/saruman_dev'
 
 DATA_DIR      = Path(__file__).parent / 'data'
@@ -1193,6 +1193,9 @@ class RadioWindow(Adw.ApplicationWindow):
 
         self._config       = _load_config()
         self._theme_mode   = self._config.get('theme_mode', 'system')
+        self._color_scheme = self._config.get('color_scheme', 'aerx')
+        if self._color_scheme not in self.COLOR_SCHEMES:
+            self._color_scheme = 'aerx'
         Adw.StyleManager.get_default().set_color_scheme(
             self._THEME_SCHEME_MAP.get(self._theme_mode, Adw.ColorScheme.DEFAULT)
         )
@@ -1266,8 +1269,12 @@ class RadioWindow(Adw.ApplicationWindow):
         if self._m3_scheme_provider is not None:
             Gtk.StyleContext.remove_provider_for_display(display, self._m3_scheme_provider)
 
-        dark = Adw.StyleManager.get_default().get_dark()
-        fname = 'style-m3-dark.css' if dark else 'style-m3-light.css'
+        meta = self.COLOR_SCHEMES.get(self._color_scheme, self.COLOR_SCHEMES['aerx'])
+        if 'fixed' in meta:
+            fname = meta['fixed']
+        else:
+            dark = Adw.StyleManager.get_default().get_dark()
+            fname = meta['dark'] if dark else meta['light']
         provider = Gtk.CssProvider()
         provider.load_from_path(str(DATA_DIR / fname))
         Gtk.StyleContext.add_provider_for_display(
@@ -1421,6 +1428,36 @@ class RadioWindow(Adw.ApplicationWindow):
         'system': Adw.ColorScheme.DEFAULT,
         'light':  Adw.ColorScheme.FORCE_LIGHT,
         'dark':   Adw.ColorScheme.FORCE_DARK,
+    }
+
+    # Esquemas de color (paletas M3 completas). 'aerx' sigue el selector
+    # Tema (claro/oscuro/sistema); el resto son paletas "fijas" de temas de
+    # editor/terminal conocidos, con un único look independiente del Tema.
+    COLOR_SCHEMES = {
+        'aerx':                 {'label': 'ÆRx (predeterminado)',
+                                  'light': 'style-m3-light.css', 'dark': 'style-m3-dark.css'},
+        'dracula':              {'label': 'Dracula',             'fixed': 'schemes/dracula.css'},
+        'tokyo-night':          {'label': 'Tokyo Night',         'fixed': 'schemes/tokyo-night.css'},
+        'catppuccin-latte':     {'label': 'Catppuccin Latte',    'fixed': 'schemes/catppuccin-latte.css'},
+        'catppuccin-frappe':    {'label': 'Catppuccin Frappé',   'fixed': 'schemes/catppuccin-frappe.css'},
+        'catppuccin-macchiato': {'label': 'Catppuccin Macchiato', 'fixed': 'schemes/catppuccin-macchiato.css'},
+        'catppuccin-mocha':     {'label': 'Catppuccin Mocha',    'fixed': 'schemes/catppuccin-mocha.css'},
+        'nord':                 {'label': 'Nord',                'fixed': 'schemes/nord.css'},
+        'one-dark':             {'label': 'One Dark',            'fixed': 'schemes/one-dark.css'},
+        'gruvbox-dark':         {'label': 'Gruvbox Dark',        'fixed': 'schemes/gruvbox-dark.css'},
+        'gruvbox-light':        {'label': 'Gruvbox Light',       'fixed': 'schemes/gruvbox-light.css'},
+        'solarized-dark':       {'label': 'Solarized Dark',      'fixed': 'schemes/solarized-dark.css'},
+        'solarized-light':      {'label': 'Solarized Light',     'fixed': 'schemes/solarized-light.css'},
+        'monokai':              {'label': 'Monokai',             'fixed': 'schemes/monokai.css'},
+        'ayu-dark':             {'label': 'Ayu Dark',            'fixed': 'schemes/ayu-dark.css'},
+        'ayu-mirage':           {'label': 'Ayu Mirage',          'fixed': 'schemes/ayu-mirage.css'},
+        'ayu-light':            {'label': 'Ayu Light',           'fixed': 'schemes/ayu-light.css'},
+        'everforest':           {'label': 'Everforest',          'fixed': 'schemes/everforest.css'},
+        'kanagawa':             {'label': 'Kanagawa',            'fixed': 'schemes/kanagawa.css'},
+        'rose-pine':            {'label': 'Rosé Pine',           'fixed': 'schemes/rose-pine.css'},
+        'night-owl':            {'label': 'Night Owl',           'fixed': 'schemes/night-owl.css'},
+        'material-palenight':   {'label': 'Material Palenight',  'fixed': 'schemes/material-palenight.css'},
+        'cyberpunk':            {'label': 'Cyberpunk',           'fixed': 'schemes/cyberpunk.css'},
     }
 
     def _build_nav_rail(self) -> Gtk.Widget:
@@ -3883,6 +3920,34 @@ class RadioWindow(Adw.ApplicationWindow):
             theme_box.append(tbtn)
         box.append(theme_box)
 
+        scheme_lbl = Gtk.Label(label='Esquema de color')
+        scheme_lbl.add_css_class('heading')
+        scheme_lbl.set_xalign(0)
+        scheme_lbl.set_margin_bottom(8)
+        box.append(scheme_lbl)
+
+        self._scheme_ids = list(self.COLOR_SCHEMES.keys())
+        scheme_labels = Gtk.StringList.new([self.COLOR_SCHEMES[sid]['label'] for sid in self._scheme_ids])
+        scheme_dropdown = Gtk.DropDown(model=scheme_labels)
+        scheme_dropdown.set_halign(Gtk.Align.START)
+        try:
+            scheme_dropdown.set_selected(self._scheme_ids.index(self._color_scheme))
+        except ValueError:
+            scheme_dropdown.set_selected(0)
+        scheme_dropdown.connect('notify::selected', self._on_color_scheme_changed)
+        box.append(scheme_dropdown)
+
+        scheme_hint = Gtk.Label(
+            label='Las paletas de temas de editor/terminal (Dracula, Nord, Catppuccin…) '
+                  'tienen un aspecto fijo, independiente del ajuste Tema de arriba.')
+        scheme_hint.add_css_class('dim-label')
+        scheme_hint.add_css_class('caption')
+        scheme_hint.set_xalign(0)
+        scheme_hint.set_wrap(True)
+        scheme_hint.set_margin_top(6)
+        scheme_hint.set_margin_bottom(24)
+        box.append(scheme_hint)
+
         general_lbl = Gtk.Label(label='General')
         general_lbl.add_css_class('heading')
         general_lbl.set_xalign(0)
@@ -3911,6 +3976,18 @@ class RadioWindow(Adw.ApplicationWindow):
         Adw.StyleManager.get_default().set_color_scheme(
             self._THEME_SCHEME_MAP.get(mode, Adw.ColorScheme.DEFAULT)
         )
+
+    def _on_color_scheme_changed(self, dropdown: Gtk.DropDown, _pspec):
+        idx = dropdown.get_selected()
+        if idx < 0 or idx >= len(self._scheme_ids):
+            return
+        sid = self._scheme_ids[idx]
+        if sid == self._color_scheme:
+            return
+        self._color_scheme = sid
+        self._config['color_scheme'] = sid
+        threading.Thread(target=lambda: _save_config(self._config), daemon=True).start()
+        self._apply_m3_scheme()
 
     def _on_settings_changed(self, _btn=None):
         self._check_updates_on_startup = self._update_check_btn.get_active()

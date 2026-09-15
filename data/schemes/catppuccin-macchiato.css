@@ -1,0 +1,73 @@
+/* ÆRx Player — esquema de color "Catppuccin Macchiato" (oscuro).
+ * Generado a partir de la paleta oficial del tema, mapeada a los
+ * roles M3/libadwaita usados por style-m3-base.css. */
+
+@define-color accent_color    #8AADF4;
+@define-color accent_bg_color #8AADF4;
+@define-color accent_fg_color #181926;
+
+@define-color destructive_color    #ED8796;
+@define-color destructive_bg_color #ED8796;
+@define-color destructive_fg_color #181926;
+
+@define-color error_color    #ED8796;
+@define-color error_bg_color #ED8796;
+@define-color error_fg_color #181926;
+
+@define-color success_color    #A6DA95;
+@define-color success_bg_color #A6DA95;
+@define-color success_fg_color #181926;
+
+@define-color warning_color    #EED49F;
+@define-color warning_bg_color #EED49F;
+@define-color warning_fg_color #181926;
+
+@define-color window_bg_color #24273A;
+@define-color window_fg_color #CAD3F5;
+
+@define-color view_bg_color #181926;
+@define-color view_fg_color #CAD3F5;
+
+@define-color headerbar_bg_color           #363A4F;
+@define-color headerbar_fg_color           #CAD3F5;
+@define-color headerbar_border_color       #494D64;
+@define-color headerbar_backdrop_color     #181926;
+@define-color headerbar_shade_color        rgba(0,0,0,0.28);
+@define-color headerbar_darker_shade_color rgba(0,0,0,0.42);
+
+@define-color card_bg_color    #363A4F;
+@define-color card_fg_color    #CAD3F5;
+@define-color card_shade_color rgba(0,0,0,0.20);
+
+@define-color dialog_bg_color #363A4F;
+@define-color dialog_fg_color #CAD3F5;
+
+@define-color popover_bg_color    #363A4F;
+@define-color popover_fg_color    #CAD3F5;
+@define-color popover_shade_color rgba(0,0,0,0.20);
+
+@define-color shade_color             rgba(0,0,0,0.28);
+@define-color scrollbar_outline_color rgba(0,0,0,0.5);
+
+@define-color sidebar_bg_color       #363A4F;
+@define-color sidebar_fg_color       #CAD3F5;
+@define-color sidebar_backdrop_color #181926;
+@define-color sidebar_shade_color    rgba(0,0,0,0.20);
+@define-color sidebar_border_color   #494D64;
+
+@define-color outline               #8087A2;
+@define-color outline_variant       #494D64;
+@define-color surface_variant_color #363A4F;
+
+@define-color secondary_container_color    #494D64;
+@define-color on_secondary_container_color #C6A0F6;
+
+@define-color tertiary_color              #C6A0F6;
+@define-color on_tertiary_color           #181926;
+@define-color tertiary_container_color    #494D64;
+@define-color on_tertiary_container_color #C6A0F6;
+
+/* Indicador de progreso "wavy" (ver style-m3-base.css) */
+scale.m3-wavy highlight {
+    background-image: url("wave-catppuccin-macchiato.svg");
+}

@@ -4,6 +4,54 @@
  * Redefine los colores con nombre de libadwaita + roles M3 propios,
  * consumidos por style-m3-base.css. */
 
+/* Duplicado como custom properties CSS (var(--nombre)): desde libadwaita 1.6
+ * (GTK 4.16+) algunos widgets internos empiezan a consumir var(--accent-bg-color)
+ * etc. en vez de (o además de) @accent_bg_color. Redefinir solo @define-color
+ * no garantiza que esos widgets recojan la paleta M3; con esto cubrimos ambos
+ * mecanismos. Ver https://blogs.gnome.org/alicem/2024/09/13/libadwaita-1-6/ */
+:root {
+    --accent-color: #3B82F6;
+    --accent-bg-color: #3B82F6;
+    --accent-fg-color: #FFFFFF;
+    --destructive-color: #EF4444;
+    --destructive-bg-color: #EF4444;
+    --destructive-fg-color: #FFFFFF;
+    --error-color: #EF4444;
+    --error-bg-color: #EF4444;
+    --error-fg-color: #FFFFFF;
+    --success-color: #7FDB94;
+    --success-bg-color: #22C55E;
+    --success-fg-color: #00390F;
+    --warning-color: #F59E0B;
+    --warning-bg-color: #F59E0B;
+    --warning-fg-color: #402D00;
+    --window-bg-color: #0B1020;
+    --window-fg-color: #E5E6E6;
+    --view-bg-color: #070912;
+    --view-fg-color: #E5E6E6;
+    --headerbar-bg-color: #121729;
+    --headerbar-fg-color: #E5E6E6;
+    --headerbar-border-color: #2A3352;
+    --headerbar-backdrop-color: #0B1020;
+    --headerbar-shade-color: rgba(0,0,0,0.25);
+    --headerbar-darker-shade-color: rgba(0,0,0,0.4);
+    --card-bg-color: #141A30;
+    --card-fg-color: #E5E6E6;
+    --card-shade-color: rgba(0,0,0,0.2);
+    --dialog-bg-color: #1B2138;
+    --dialog-fg-color: #E5E6E6;
+    --popover-bg-color: #121729;
+    --popover-fg-color: #E5E6E6;
+    --popover-shade-color: rgba(0,0,0,0.2);
+    --shade-color: rgba(0,0,0,0.3);
+    --scrollbar-outline-color: rgba(0,0,0,0.5);
+    --sidebar-bg-color: #141A30;
+    --sidebar-fg-color: #E5E6E6;
+    --sidebar-backdrop-color: #0B1020;
+    --sidebar-shade-color: rgba(0,0,0,0.2);
+    --sidebar-border-color: #2A3352;
+}
+
 @define-color accent_color            #3B82F6;
 @define-color accent_bg_color         #3B82F6;
 @define-color accent_fg_color         #FFFFFF;

@@ -7,7 +7,7 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 
 PKG_NAME="aerx-player"
-PKG_VERSION="${PKG_VERSION:-0.99-beta2}"
+PKG_VERSION="${PKG_VERSION:-0.99-beta3}"
 PKG_ARCH="all"
 PKG_FILE="${PKG_NAME}_${PKG_VERSION}_${PKG_ARCH}.deb"
 
@@ -52,6 +52,11 @@ done
 # Hero banner (cabecera de la vista de inicio)
 install -m644 "$APP_DIR/data/hero-banner.png" \
               "$STAGE/$INSTALL_DIR/data/hero-banner.png"
+
+# Esquemas de color (paletas M3 completas seleccionables en Ajustes)
+install -d "$STAGE/$INSTALL_DIR/data/schemes"
+install -m644 "$APP_DIR"/data/schemes/*.css "$APP_DIR"/data/schemes/*.svg \
+              "$STAGE/$INSTALL_DIR/data/schemes/"
 
 # Logo ÆRx (cabecera y hero, cargado vía DATA_DIR / 'icons' / 'aerx-mark.svg')
 install -d "$STAGE/$INSTALL_DIR/data/icons"

@@ -1,0 +1,73 @@
+/* ÆRx Player — esquema de color "Solarized Dark" (oscuro).
+ * Generado a partir de la paleta oficial del tema, mapeada a los
+ * roles M3/libadwaita usados por style-m3-base.css. */
+
+@define-color accent_color    #268BD2;
+@define-color accent_bg_color #268BD2;
+@define-color accent_fg_color #002B36;
+
+@define-color destructive_color    #DC322F;
+@define-color destructive_bg_color #DC322F;
+@define-color destructive_fg_color #002B36;
+
+@define-color error_color    #DC322F;
+@define-color error_bg_color #DC322F;
+@define-color error_fg_color #002B36;
+
+@define-color success_color    #859900;
+@define-color success_bg_color #859900;
+@define-color success_fg_color #002B36;
+
+@define-color warning_color    #B58900;
+@define-color warning_bg_color #B58900;
+@define-color warning_fg_color #002B36;
+
+@define-color window_bg_color #002B36;
+@define-color window_fg_color #93A1A1;
+
+@define-color view_bg_color #00212B;
+@define-color view_fg_color #93A1A1;
+
+@define-color headerbar_bg_color           #073642;
+@define-color headerbar_fg_color           #93A1A1;
+@define-color headerbar_border_color       #0A4552;
+@define-color headerbar_backdrop_color     #00212B;
+@define-color headerbar_shade_color        rgba(0,0,0,0.28);
+@define-color headerbar_darker_shade_color rgba(0,0,0,0.42);
+
+@define-color card_bg_color    #073642;
+@define-color card_fg_color    #93A1A1;
+@define-color card_shade_color rgba(0,0,0,0.20);
+
+@define-color dialog_bg_color #073642;
+@define-color dialog_fg_color #93A1A1;
+
+@define-color popover_bg_color    #073642;
+@define-color popover_fg_color    #93A1A1;
+@define-color popover_shade_color rgba(0,0,0,0.20);
+
+@define-color shade_color             rgba(0,0,0,0.28);
+@define-color scrollbar_outline_color rgba(0,0,0,0.5);
+
+@define-color sidebar_bg_color       #073642;
+@define-color sidebar_fg_color       #93A1A1;
+@define-color sidebar_backdrop_color #00212B;
+@define-color sidebar_shade_color    rgba(0,0,0,0.20);
+@define-color sidebar_border_color   #0A4552;
+
+@define-color outline               #586E75;
+@define-color outline_variant       #0A4552;
+@define-color surface_variant_color #073642;
+
+@define-color secondary_container_color    #0A4552;
+@define-color on_secondary_container_color #D33682;
+
+@define-color tertiary_color              #6C71C4;
+@define-color on_tertiary_color           #002B36;
+@define-color tertiary_container_color    #0A4552;
+@define-color on_tertiary_container_color #D33682;
+
+/* Indicador de progreso "wavy" (ver style-m3-base.css) */
+scale.m3-wavy highlight {
+    background-image: url("wave-solarized-dark.svg");
+}
