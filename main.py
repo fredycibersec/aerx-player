@@ -35,7 +35,7 @@ import metadata as meta_mod
 
 Gst.init(None)
 
-APP_VERSION = '0.99-beta'
+APP_VERSION = '0.99-beta2'
 KOFI_URL    = 'https://ko-fi.com/saruman_dev'
 
 DATA_DIR      = Path(__file__).parent / 'data'

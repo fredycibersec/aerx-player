@@ -7,7 +7,7 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 
 PKG_NAME="aerx-player"
-PKG_VERSION="${PKG_VERSION:-0.99-beta}"
+PKG_VERSION="${PKG_VERSION:-0.99-beta2}"
 PKG_ARCH="all"
 PKG_FILE="${PKG_NAME}_${PKG_VERSION}_${PKG_ARCH}.deb"
 
@@ -48,6 +48,15 @@ install -m644 "$APP_DIR/data/spanish_stations.json" \
 for f in style-m3-base.css style-m3-light.css style-m3-dark.css wave-light.svg wave-dark.svg; do
     install -m644 "$APP_DIR/data/$f" "$STAGE/$INSTALL_DIR/data/$f"
 done
+
+# Hero banner (cabecera de la vista de inicio)
+install -m644 "$APP_DIR/data/hero-banner.png" \
+              "$STAGE/$INSTALL_DIR/data/hero-banner.png"
+
+# Logo ÆRx (cabecera y hero, cargado vía DATA_DIR / 'icons' / 'aerx-mark.svg')
+install -d "$STAGE/$INSTALL_DIR/data/icons"
+install -m644 "$APP_DIR/data/icons/aerx-mark.svg" \
+              "$STAGE/$INSTALL_DIR/data/icons/aerx-mark.svg"
 
 # Iconos Material Symbols (tema symbolic propio, cargado vía add_search_path)
 install -d "$STAGE/$INSTALL_DIR/data/icons/hicolor/scalable/actions"

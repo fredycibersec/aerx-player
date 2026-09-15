@@ -27,7 +27,7 @@
 ---
 
 > [!IMPORTANT]
-> **ÆRx Player está en fase 0.99-beta**, la última beta antes del lanzamiento estable de la **1.0**. Es funcional y estable en el día a día, pero puede haber cambios de última hora en la interfaz o en el formato de configuración antes de la versión final. ¡Los reportes de fallos son muy bienvenidos!
+> **ÆRx Player está en fase 0.99-beta2**, la última beta antes del lanzamiento estable de la **1.0**. Es funcional y estable en el día a día, pero puede haber cambios de última hora en la interfaz o en el formato de configuración antes de la versión final. ¡Los reportes de fallos son muy bienvenidos!
 
 ---
 
@@ -61,7 +61,7 @@
 Descarga el último `.deb` desde la sección [Releases](../../releases/latest) e instálalo con:
 
 ```bash
-sudo apt install ./aerx-player_0.99-beta_all.deb
+sudo apt install ./aerx-player_0.99-beta2_all.deb
 ```
 
 Esto instala todas las dependencias automáticamente. Después busca **ÆRx Player** en el lanzador de aplicaciones o ejecuta `aerx` en la terminal.
@@ -160,6 +160,7 @@ aerx-player/
 
 | Versión     | Cambios destacados |
 |-------------|-------------------|
+| 0.99-beta2  | Corrige el `.deb`: faltaban `hero-banner.png` y `icons/aerx-mark.svg` en el paquete, por lo que el banner y el logo no se veían tras instalar en otra máquina. |
 | 0.99-beta   | **Relanzamiento como ÆRx Player** (antes RadioES): nueva identidad de marca e iconografía, soporte de **podcasts** (búsqueda, suscripción y descarga de episodios), y últimos ajustes de estilo Material Design 3 en los controles de reproducción. Última beta antes de la **1.0**. |
 
 ---
