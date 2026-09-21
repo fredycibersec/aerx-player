@@ -251,12 +251,50 @@ scale slider {
     box-shadow: 0 1px 2px alpha(black, 0.30);
 }
 
+/* ── Slider recto M3 (p.ej. volumen): mismo aspecto que el indicador
+ * "wavy" de progreso, pero con trazo recto en vez de ondulado.
+ *
+ * Poner min-height a secas en `trough`/`highlight` no basta: esos nodos
+ * siguen ocupando una caja alta (el hueco donde se mueve el thumb) y con
+ * background-color sólido de base (heredado de la regla `scale` de más
+ * arriba) esa caja entera se pinta llena, dando la pastilla enorme que se
+ * veía. El .m3-wavy de al lado ya resuelve esto: caja de 10px con fondo
+ * TRANSPARENTE y solo una imagen fina (la onda) pintada dentro. Aquí se
+ * hace lo mismo pero con una imagen de línea recta en vez de la onda. ── */
+
+scale.m3-linear trough {
+    min-height: 10px;
+    background-color: transparent;
+    background-image: linear-gradient(@surface_variant_color, @surface_variant_color);
+    background-size: 100% 4px;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+scale.m3-linear highlight {
+    min-height: 10px;
+    background-color: transparent;
+    background-image: linear-gradient(@accent_color, @accent_color);
+    background-size: 100% 4px;
+    background-repeat: no-repeat;
+    background-position: left center;
+    border-radius: 9999px;
+}
+
+scale.m3-linear slider {
+    min-width: 4px;
+    min-height: 20px;
+}
+
 /* ── Indicador de progreso "wavy" M3 (Linear progress indicator, variante
  * with-wave — no el componente "Slider") — medidas exactas de los design
  * tokens oficiales (material-web, md.comp.progress-indicator.linear.*):
  *   track-thickness: 4px · active-indicator-thickness: 4px
  *   wave.amplitude: 3px · wave.wavelength: 40px · with-wave-height: 10px
- *   track-active-indicator-space: 4px · stop-indicator-size: 4px
+ *   stop-indicator-size: 4px
+ * El token track-active-indicator-space (4px) del spec oficial se omite a
+ * propósito: con él, el trazo ondulado quedaba con un hueco visible antes
+ * del thumb en vez de llegar hasta él.
  * El color exacto del trazo lo aporta wave-light.svg / wave-dark.svg
  * (uno por esquema, referenciados desde style-m3-light/dark.css). */
 
@@ -279,8 +317,6 @@ scale.m3-wavy highlight {
     background-position: left center;
     background-size: 40px 10px;
     border-radius: 0;
-    /* hueco entre el indicador activo y la pista restante (M3: track-active-indicator-space) */
-    margin-right: 4px;
 }
 
 scale.m3-wavy slider {

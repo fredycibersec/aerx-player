@@ -35,7 +35,7 @@ import metadata as meta_mod
 
 Gst.init(None)
 
-APP_VERSION = '0.99-beta3'
+APP_VERSION = '1.0'
 KOFI_URL    = 'https://ko-fi.com/saruman_dev'
 
 DATA_DIR      = Path(__file__).parent / 'data'
@@ -106,12 +106,19 @@ _FULLSCREEN_MIN_SIDE = 150   # lado menor mínimo (px) para activar el fondo a p
 _COVER_BLUR_FACTOR    = 5    # downscale por pasada (pirámide iterativa, no un solo salto agresivo)
 _COVER_BLUR_PASSES    = 5    # nº de pasadas de downscale+upscale acumulativas
 
+_MINI_WINDOW_SIZE     = (300, 420)   # tamaño de ventana en modo mini (ancho, alto)
+_NORMAL_MIN_SIZE      = (480, 500)   # mínimo de la ventana en modo normal (ver __init__)
+_MINI_SPECTRUM_HEIGHT = 190          # ~ mitad de _MINI_WINDOW_SIZE[1], anclado abajo
+
 _COVER_BG_CSS = b"""
 .cover-dim-layer {
     background-color: rgba(0, 0, 0, 0.55);
 }
 .now-playing-translucent {
     background-color: transparent;
+}
+.mini-player-solid-bg {
+    background-color: @card_bg_color;
 }
 """
 
@@ -533,25 +540,45 @@ class SpectrumVisualizer(Gtk.Overlay):
     THRESHOLD     = -80.0
     DECAY         = 1.2
     HEIGHT        = 160
+    HALO_TICKS    = 72   # marcas del anillo ambiental — denso, a diferencia de DISPLAY_BANDS
+    SPECTROGRAM_HISTORY = 320   # nº máx. de columnas (frames) que guarda el spectrogram
 
-    _MODES = ('gauss', 'bars', 'scope', 'classic', 'radial', 'mirror', 'vu', 'particles')
+    _MODES = ('gauss', 'bars', 'scope', 'classic', 'spectrogram', 'radial', 'mirror', 'vu', 'particles')
     _LABELS = {
-        'gauss':     'Onda suave',
-        'bars':      'Barras agrupadas',
-        'scope':     'Osciloscopio',
-        'classic':   'Barras clásicas',
-        'radial':    'Radial',
-        'mirror':    'Espejo',
-        'vu':        'Vúmetro',
-        'particles': 'Partículas',
+        'gauss':       'Onda suave',
+        'bars':        'Barras agrupadas',
+        'scope':       'Osciloscopio',
+        'classic':     'Barras clásicas',
+        'spectrogram': 'Espectrograma',
+        'radial':      'Radial',
+        'mirror':      'Espejo',
+        'vu':          'Vúmetro',
+        'particles':   'Partículas',
     }
+    # El botón de ciclo solo recorre estos — 'radial' se retiró porque ahora
+    # vive aparte como anillo ambiental fijo alrededor de la carátula (ver
+    # ring_geometry más abajo), y mostrarlo también en el panel grande sería
+    # redundante.
+    CYCLE_MODES = tuple(m for m in _MODES if m != 'radial')
 
-    def __init__(self):
+    def __init__(self, bottom_fade: bool = False, initial_mode: str = 'gauss',
+                 ring_geometry: tuple[int, int] | None = None):
         super().__init__()
         self._mags   = [self.THRESHOLD] * self.BANDS
         self._peaks  = [self.THRESHOLD] * self.BANDS
+        self._spec_history = []   # historial de frames para el modo "spectrogram"
         self._active = False
-        self._mode   = 0
+        self._mode   = self._MODES.index(initial_mode)
+        # Si está activo, el dibujo se enmascara con un degradado vertical
+        # de alfa (0% arriba → 50% abajo) — usado en el modo mini, donde el
+        # espectrograma decorativo debe fundirse hacia arriba en vez de
+        # cortar en seco.
+        self._bottom_fade = bottom_fade
+        # (hole_radius, ring_width): cuando se da, esta instancia se dibuja
+        # como el anillo ambiental (_draw_radial_halo) en vez de cualquier
+        # modo normal — pensado para rodear la carátula, con un hueco
+        # central del radio de esta y un grosor de anillo fijo.
+        self._ring_geometry = ring_geometry
 
         # Estado del modo "particles" (ondas concéntricas + partículas orbitales)
         self._waves          = []   # lista de dicts {'progress': 0..1, 'strength': 0..1}
@@ -560,12 +587,19 @@ class SpectrumVisualizer(Gtk.Overlay):
         self._particle_phase = 0.0
 
         self._da = Gtk.DrawingArea()
-        self._da.set_size_request(-1, self.HEIGHT)
-        self._da.set_hexpand(True)
         self._da.set_draw_func(self._draw)
         self.set_child(self._da)
-        self.set_size_request(-1, self.HEIGHT)
-        self.set_hexpand(True)
+
+        if ring_geometry:
+            size = sum(ring_geometry) * 2
+            self._da.set_size_request(size, size)
+            self.set_size_request(size, size)
+            self.set_hexpand(False)
+        else:
+            self._da.set_size_request(-1, self.HEIGHT)
+            self._da.set_hexpand(True)
+            self.set_size_request(-1, self.HEIGHT)
+            self.set_hexpand(True)
 
         btn = Gtk.Button()
         btn.set_icon_name('m3-sync-symbolic')
@@ -576,15 +610,21 @@ class SpectrumVisualizer(Gtk.Overlay):
         btn.set_margin_end(6)
         btn.set_margin_top(6)
         btn.set_opacity(0.55)
-        btn.set_tooltip_text('Modo: ' + self._LABELS[self._MODES[0]])
+        btn.set_tooltip_text('Modo: ' + self._LABELS[self._MODES[self._mode]])
         btn.connect('clicked', self._on_cycle)
         self._cycle_btn = btn
         self.add_overlay(btn)
+        if ring_geometry:
+            # Anillo ambiental: siempre el mismo dibujo, sin selector de modo.
+            btn.set_visible(False)
 
         GLib.timeout_add(50, self._tick)
 
     def _on_cycle(self, _btn):
-        self._mode = (self._mode + 1) % len(self._MODES)
+        current = self._MODES[self._mode]
+        pos = self.CYCLE_MODES.index(current) if current in self.CYCLE_MODES else -1
+        next_name = self.CYCLE_MODES[(pos + 1) % len(self.CYCLE_MODES)]
+        self._mode = self._MODES.index(next_name)
         self._cycle_btn.set_tooltip_text('Modo: ' + self._LABELS[self._MODES[self._mode]])
         self._da.queue_draw()
 
@@ -596,6 +636,15 @@ class SpectrumVisualizer(Gtk.Overlay):
             self._mags[i] = v
             if v > self._peaks[i]:
                 self._peaks[i] = v
+
+        if self._cycle_btn.get_visible():
+            # Solo instancias donde el modo "spectrogram" es alcanzable
+            # (botón de ciclo visible) acumulan historial — el anillo
+            # ambiental y el mini-espectrograma tienen el ciclo oculto y su
+            # modo fijo, así que guardarlo ahí sería trabajo tirado.
+            self._spec_history.append(list(self._mags))
+            if len(self._spec_history) > self.SPECTROGRAM_HISTORY:
+                del self._spec_history[0]
 
         if self._MODES[self._mode] == 'particles':
             # Detección simple de golpe de graves: subida brusca en las bandas más bajas
@@ -611,6 +660,7 @@ class SpectrumVisualizer(Gtk.Overlay):
     def reset(self):
         self._mags   = [self.THRESHOLD] * self.BANDS
         self._peaks  = [self.THRESHOLD] * self.BANDS
+        self._spec_history = []
         self._active = False
         self._waves  = []
         self._prev_bass     = 0.0
@@ -695,15 +745,32 @@ class SpectrumVisualizer(Gtk.Overlay):
         cr.set_operator(1)
         if not self._active:
             return
+        if self._ring_geometry:
+            self._draw_radial_halo(cr, width, height, _cairo)
+            return
+        if self._bottom_fade:
+            cr.push_group()
+
         mode = self._MODES[self._mode]
         if   mode == 'gauss':   self._draw_gauss(cr, width, height, _cairo)
         elif mode == 'bars':    self._draw_bars(cr, width, height, _cairo)
         elif mode == 'scope':   self._draw_scope(cr, width, height, _cairo)
         elif mode == 'classic': self._draw_classic(cr, width, height, _cairo)
+        elif mode == 'spectrogram': self._draw_spectrogram(cr, width, height, _cairo)
         elif mode == 'radial':  self._draw_radial(cr, width, height, _cairo)
         elif mode == 'mirror':  self._draw_mirror(cr, width, height, _cairo)
         elif mode == 'vu':        self._draw_vu(cr, width, height, _cairo)
         elif mode == 'particles': self._draw_particles(cr, width, height, _cairo)
+
+        if self._bottom_fade:
+            # Enmascara todo el dibujo con un degradado vertical de alfa:
+            # 0% arriba (se funde con lo que haya detrás) → 50% abajo.
+            cr.pop_group_to_source()
+            cr.set_operator(_cairo.OPERATOR_OVER)
+            grad = _cairo.LinearGradient(0, 0, 0, height)
+            grad.add_color_stop_rgba(0.0, 0, 0, 0, 0.0)
+            grad.add_color_stop_rgba(1.0, 0, 0, 0, 0.5)
+            cr.mask(grad)
 
     # ── Modo 0: Gauss — campana suave simétrica ─────────────────────────────────
 
@@ -897,6 +964,63 @@ class SpectrumVisualizer(Gtk.Overlay):
                 cr.set_source_rgba(rv, gv, bv, 0.95)
                 cr.rectangle(x, py, bar_w, 2.5)
                 cr.fill()
+
+    # ── Modo: Spectrogram — cascada frecuencia (Y) / tiempo (X) ─────────────────
+
+    def _draw_spectrogram(self, cr, width, height, _cairo):
+        # Fondo oscuro: el estándar de un spectrogram "profesional" — las
+        # bandas silenciosas se funden con él (alpha = amplitud, sin suelo
+        # mínimo, a diferencia del anillo ambiental).
+        cr.set_source_rgba(0.02, 0.02, 0.05, 0.92)
+        cr.rectangle(0, 0, width, height)
+        cr.fill()
+
+        col_w  = 3
+        n_cols = max(1, min(len(self._spec_history), int(width / col_w) + 1))
+        history = self._spec_history[-n_cols:]
+        row_h  = height / self.BANDS
+        x = width - len(history) * col_w
+
+        for frame in history:
+            for band in range(self.BANDS):
+                norm = self._norm(frame[band])
+                if norm >= 0.03:
+                    r, g, b, _a = self._amp_color(norm)
+                    cr.set_source_rgba(r, g, b, min(1.0, norm))
+                    y = height - (band + 1) * row_h
+                    cr.rectangle(x, y - 0.5, col_w + 0.6, row_h + 0.6)
+                    cr.fill()
+            x += col_w
+
+    # ── Anillo ambiental (alrededor de la carátula) ─────────────────────────────
+    # A diferencia del modo Radial normal: monocromo (blanco, sin la escala
+    # verde→amarillo→rojo), sin relleno ni contorno — solo marcas radiales
+    # finas y numerosas (HALO_TICKS), más densas que DISPLAY_BANDS.
+
+    def _draw_radial_halo(self, cr, width, height, _cairo):
+        import math
+        cx, cy = width / 2, height / 2
+        r_min, ring_width = self._ring_geometry
+        D    = self.HALO_TICKS
+        step = 2 * math.pi / D
+
+        for i in range(D):
+            band = int(i * self.BANDS / D) % self.BANDS
+            norm = self._norm(self._mags[band]) ** 0.6
+            length = ring_width * (0.16 + norm * 0.84)
+            alpha  = 0.32 + norm * 0.63
+            angle  = -math.pi / 2 + i * step
+            x_in   = cx + r_min * math.cos(angle)
+            y_in   = cy + r_min * math.sin(angle)
+            x_out  = cx + (r_min + length) * math.cos(angle)
+            y_out  = cy + (r_min + length) * math.sin(angle)
+
+            cr.set_source_rgba(1.0, 1.0, 1.0, alpha)
+            cr.set_line_width(1.2)
+            cr.set_line_cap(_cairo.LineCap.ROUND)
+            cr.move_to(x_in, y_in)
+            cr.line_to(x_out, y_out)
+            cr.stroke()
 
     # ── Modo 4: Radial — circular ────────────────────────────────────────────────
 
@@ -1137,7 +1261,7 @@ class RadioWindow(Adw.ApplicationWindow):
         super().__init__(application=app)
         self.set_title('ÆRx Player')
         self.set_default_size(960, 640)
-        self.set_size_request(480, 500)
+        self.set_size_request(*_NORMAL_MIN_SIZE)
 
         self._player = Player()
         self._player.connect('metadata-changed', self._on_metadata)
@@ -1190,6 +1314,8 @@ class RadioWindow(Adw.ApplicationWindow):
         self._sleep_remaining     = 0
         self._current_cover_data  = None
         self._cover_fullscreen_active = False
+        self._mini_mode      = False
+        self._normal_win_size = None
 
         self._config       = _load_config()
         self._theme_mode   = self._config.get('theme_mode', 'system')
@@ -1282,30 +1408,75 @@ class RadioWindow(Adw.ApplicationWindow):
         )
         self._m3_scheme_provider = provider
 
-    def _update_cover_display_mode(self):
-        """Decide fullscreen-blur-background vs small-thumbnail mode for the cover."""
-        cover_data = self._current_cover_data
-        show_sidebar = self._split_view.get_show_sidebar() if self._split_view else True
+    @staticmethod
+    def _blurred_cover_bg(cover_data: bytes | None) -> GdkPixbuf.Pixbuf | None:
+        """Carátula nativa desenfocada apta como fondo, o None si no hay
+        carátula o es demasiado pequeña (entonces toca fondo sólido)."""
+        if not cover_data:
+            return None
+        native_pb = _cover_native_pixbuf(cover_data)
+        if native_pb and min(native_pb.get_width(), native_pb.get_height()) >= _FULLSCREEN_MIN_SIDE:
+            return _blur_pixbuf(native_pb)
+        return None
 
-        use_fullscreen = False
-        native_pb = None
-        if cover_data and not show_sidebar:
-            native_pb = _cover_native_pixbuf(cover_data)
-            if native_pb and min(native_pb.get_width(), native_pb.get_height()) >= _FULLSCREEN_MIN_SIDE:
-                use_fullscreen = True
-
-        if use_fullscreen == self._cover_fullscreen_active:
-            return
-        self._cover_fullscreen_active = use_fullscreen
-
-        if use_fullscreen and native_pb is not None:
-            blurred = _blur_pixbuf(native_pb)
+    def _apply_blurred_bg(self, blurred):
+        """Aplica (o quita) el fondo a pantalla completa a partir de un
+        pixbuf ya desenfocado (o None). Separado de _update_cover_display_mode
+        para poder reutilizar un blur ya calculado en vez de recalcularlo."""
+        self._cover_fullscreen_active = blurred is not None
+        if blurred is not None:
             self._cover_bg_picture.set_pixbuf(blurred)
             self._cover_bg_picture.set_visible(True)
             self._cover_dim_layer.set_visible(True)
         else:
             self._cover_bg_picture.set_visible(False)
             self._cover_dim_layer.set_visible(False)
+
+    def _apply_blurred_mini_bg(self, blurred):
+        """Igual que _apply_blurred_bg pero para el fondo del mini-reproductor
+        (sin depender del sidebar: si no hay blur apto, cae a fondo sólido)."""
+        if blurred is not None:
+            self._mini_bg_picture.set_pixbuf(blurred)
+            self._mini_bg_picture.set_visible(True)
+            self._mini_dim_layer.set_visible(True)
+            self._mini_solid_bg.set_visible(False)
+        else:
+            self._mini_bg_picture.set_visible(False)
+            self._mini_dim_layer.set_visible(False)
+            self._mini_solid_bg.set_visible(True)
+
+    def _refresh_cover_backgrounds(self):
+        """Recalcula el/los fondo(s) desenfocados a partir de
+        self._current_cover_data — el blur (caro: 5 pasadas de downscale/
+        upscale) se calcula como máximo una vez aunque haga falta tanto
+        para el fondo a pantalla completa como para el del mini-reproductor."""
+        blurred = self._blurred_cover_bg(self._current_cover_data)
+        show_sidebar = self._split_view.get_show_sidebar() if self._split_view else True
+        self._apply_blurred_bg(blurred if not show_sidebar else None)
+        if self._mini_mode:
+            self._apply_blurred_mini_bg(blurred)
+
+    def _update_cover_display_mode(self):
+        """Reevalúa el fondo a pantalla completa sin que haya cambiado la
+        carátula (p.ej. al mostrar/ocultar el sidebar)."""
+        self._refresh_cover_backgrounds()
+
+    def _apply_cover_pixbuf(self, pb, fallback_icon: str):
+        """Aplica una carátula (o el icono de respaldo si no hay pixbuf) a
+        la vez en la vista normal y en el mini-reproductor, y refresca los
+        fondos desenfocados de ambos. Punto único para esto — repartir el
+        set_from_pixbuf/set_from_icon_name por cada sitio que carga una
+        carátula (radio/mp3/podcast/ICY) es como se quedó el mini-cover sin
+        actualizar la primera vez: alguno de esos sitios no lo tocaba."""
+        if pb:
+            self._cover_image.set_from_pixbuf(pb)
+            self._mini_cover_image.set_from_pixbuf(pb)
+        else:
+            self._cover_image.set_from_icon_name(fallback_icon)
+            self._cover_image.set_pixel_size(160)
+            self._mini_cover_image.set_from_icon_name(fallback_icon)
+            self._mini_cover_image.set_pixel_size(120)
+        self._refresh_cover_backgrounds()
 
     def _build_ui(self):
         root = Adw.ToolbarView()
@@ -1333,6 +1504,14 @@ class RadioWindow(Adw.ApplicationWindow):
 
         # Ajustes y Acerca de viven ahora en el rail de navegación (parte
         # baja del menú), no en la cabecera.
+
+        self._mini_btn = Gtk.Button()
+        self._mini_btn.set_icon_name('m3-picture-in-picture-symbolic')
+        self._mini_btn.set_tooltip_text('Modo mini')
+        self._mini_btn.add_css_class('flat')
+        self._mini_btn.add_css_class('circular')
+        self._mini_btn.connect('clicked', self._on_toggle_mini_clicked)
+        header.pack_end(self._mini_btn)
 
         self._header_search = Gtk.SearchEntry()
         self._header_search.set_placeholder_text('Buscar emisoras, géneros o podcasts…')
@@ -1409,8 +1588,19 @@ class RadioWindow(Adw.ApplicationWindow):
         content_box.append(split_container)
         content_box.append(controls)
 
+        self._mode_stack = Gtk.Stack()
+        self._mode_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self._mode_stack.set_transition_duration(150)
+        # Homogéneo por defecto = el Stack pide el tamaño máximo de TODAS sus
+        # páginas (también la oculta), lo que impide encoger la ventana al
+        # tamaño mini: que solo pida el tamaño de la página visible.
+        self._mode_stack.set_hhomogeneous(False)
+        self._mode_stack.set_vhomogeneous(False)
+        self._mode_stack.add_named(content_box, 'normal')
+        self._mode_stack.add_named(self._build_mini_player(), 'mini')
+
         self._toast_overlay = Adw.ToastOverlay()
-        self._toast_overlay.set_child(content_box)
+        self._toast_overlay.set_child(self._mode_stack)
         root.set_content(self._toast_overlay)
 
         self._nav_list.select_row(self._nav_rows['home'])
@@ -2229,9 +2419,7 @@ class RadioWindow(Adw.ApplicationWindow):
         self._set_radio_mode(False)
 
         self._current_cover_data = None
-        self._cover_image.set_from_icon_name('m3-podcasts-symbolic')
-        self._cover_image.set_pixel_size(160)
-        self._update_cover_display_mode()
+        self._apply_cover_pixbuf(None, 'm3-podcasts-symbolic')
         artwork = ep.get('artwork_url') or show.get('artwork_url', '')
         if artwork and artwork.startswith('http'):
             radio_browser.fetch_image(artwork, self._on_episode_cover_fetched)
@@ -2261,8 +2449,7 @@ class RadioWindow(Adw.ApplicationWindow):
             return
         def _apply():
             self._current_cover_data = data
-            self._cover_image.set_from_pixbuf(pb)
-            self._update_cover_display_mode()
+            self._apply_cover_pixbuf(pb, 'm3-podcasts-symbolic')
         GLib.idle_add(_apply)
 
     def _build_explore_page(self) -> Gtk.Widget:
@@ -2563,6 +2750,7 @@ class RadioWindow(Adw.ApplicationWindow):
 
         art_frame = Gtk.Frame()
         art_frame.set_halign(Gtk.Align.CENTER)
+        art_frame.set_valign(Gtk.Align.CENTER)
         art_frame.add_css_class('card')
 
         self._cover_image = Gtk.Image()
@@ -2574,7 +2762,15 @@ class RadioWindow(Adw.ApplicationWindow):
         self._cover_image.set_margin_top(8)
         self._cover_image.set_margin_bottom(8)
         art_frame.set_child(self._cover_image)
-        box.append(art_frame)
+
+        # Anillo ambiental siempre visible alrededor de la carátula (radio
+        # del hueco ~ mitad de los 176px del art_frame, con margen).
+        self._cover_halo = SpectrumVisualizer(ring_geometry=(94, 24))
+        art_wrap = Gtk.Overlay()
+        art_wrap.set_child(self._cover_halo)
+        art_wrap.add_overlay(art_frame)
+        art_wrap.set_halign(Gtk.Align.CENTER)
+        box.append(art_wrap)
 
         info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         info_box.set_halign(Gtk.Align.CENTER)
@@ -2608,7 +2804,7 @@ class RadioWindow(Adw.ApplicationWindow):
         self._meta_box.set_hexpand(True)
         box.append(self._meta_box)
 
-        self._spectrum_viz = SpectrumVisualizer()
+        self._spectrum_viz = SpectrumVisualizer(initial_mode='scope')
         box.append(self._spectrum_viz)
 
         scroll = Gtk.ScrolledWindow()
@@ -2616,6 +2812,139 @@ class RadioWindow(Adw.ApplicationWindow):
         scroll.set_child(box)
         scroll.set_hexpand(True)
         return scroll
+
+    def _build_mini_player(self) -> Gtk.Widget:
+        """Vista compacta: carátula, fondo desenfocado (o sólido si no hay
+        carátula apta), espectrograma decorativo, título/artista y
+        transporte (anterior/play-pause/siguiente). El botón de volver al
+        modo completo vive solo en la cabecera (el mismo que abre el modo
+        mini), no hace falta duplicarlo aquí."""
+        overlay = Gtk.Overlay()
+
+        self._mini_solid_bg = Gtk.Box()
+        self._mini_solid_bg.add_css_class('mini-player-solid-bg')
+        overlay.set_child(self._mini_solid_bg)
+
+        self._mini_bg_picture = Gtk.Picture()
+        self._mini_bg_picture.set_content_fit(Gtk.ContentFit.COVER)
+        self._mini_bg_picture.set_can_shrink(True)
+        self._mini_bg_picture.set_visible(False)
+        overlay.add_overlay(self._mini_bg_picture)
+
+        self._mini_dim_layer = Gtk.Box()
+        self._mini_dim_layer.add_css_class('cover-dim-layer')
+        self._mini_dim_layer.set_visible(False)
+        overlay.add_overlay(self._mini_dim_layer)
+
+        # Espectrograma decorativo, anclado a la mitad inferior, detrás del
+        # resto de la interfaz ("bajo la interfaz"). Lo que se degrada es
+        # el propio dibujo del espectro (alfa 50% abajo → 0% arriba, ver
+        # SpectrumVisualizer._draw), no una capa aparte tapándolo. Es
+        # puramente ambiental aquí, así que se oculta su botón de cambio
+        # de modo (visible en la página Reproduciendo normal).
+        self._mini_spectrum_viz = SpectrumVisualizer(bottom_fade=True, initial_mode='bars')
+        self._mini_spectrum_viz._cycle_btn.set_visible(False)
+        self._mini_spectrum_viz.set_valign(Gtk.Align.END)
+        self._mini_spectrum_viz.set_halign(Gtk.Align.FILL)
+        self._mini_spectrum_viz.set_size_request(-1, _MINI_SPECTRUM_HEIGHT)
+        overlay.add_overlay(self._mini_spectrum_viz)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        content.set_valign(Gtk.Align.CENTER)
+        content.set_halign(Gtk.Align.CENTER)
+        content.set_margin_top(24);    content.set_margin_bottom(24)
+        content.set_margin_start(24);  content.set_margin_end(24)
+
+        art_frame = Gtk.Frame()
+        art_frame.set_halign(Gtk.Align.CENTER)
+        art_frame.add_css_class('card')
+
+        self._mini_cover_image = Gtk.Image()
+        self._mini_cover_image.set_pixel_size(120)
+        self._mini_cover_image.set_from_icon_name('m3-music-note-symbolic')
+        self._mini_cover_image.set_size_request(120, 120)
+        self._mini_cover_image.set_margin_start(6); self._mini_cover_image.set_margin_end(6)
+        self._mini_cover_image.set_margin_top(6);   self._mini_cover_image.set_margin_bottom(6)
+        art_frame.set_child(self._mini_cover_image)
+        content.append(art_frame)
+
+        self._mini_title_label = Gtk.Label(label='Sin reproducir')
+        self._mini_title_label.add_css_class('title-2')
+        self._mini_title_label.set_wrap(True)
+        self._mini_title_label.set_justify(Gtk.Justification.CENTER)
+        self._mini_title_label.set_max_width_chars(24)
+        content.append(self._mini_title_label)
+
+        self._mini_artist_label = Gtk.Label(label='')
+        self._mini_artist_label.add_css_class('body')
+        self._mini_artist_label.add_css_class('dim-label')
+        self._mini_artist_label.set_wrap(True)
+        self._mini_artist_label.set_justify(Gtk.Justification.CENTER)
+        self._mini_artist_label.set_max_width_chars(24)
+        content.append(self._mini_artist_label)
+
+        transport = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        transport.set_halign(Gtk.Align.CENTER)
+
+        mini_prev_btn = Gtk.Button()
+        mini_prev_btn.set_icon_name('m3-skip-previous-symbolic')
+        mini_prev_btn.add_css_class('circular')
+        mini_prev_btn.connect('clicked', self._on_prev_track)
+        transport.append(mini_prev_btn)
+
+        self._mini_play_btn = Gtk.Button()
+        self._mini_play_btn.set_icon_name('m3-play-arrow-symbolic')
+        self._mini_play_btn.add_css_class('circular')
+        self._mini_play_btn.add_css_class('suggested-action')
+        self._mini_play_btn.add_css_class('m3-fab')
+        self._mini_play_btn.set_size_request(56, 56)
+        self._mini_play_btn.connect('clicked', self._on_play_pause)
+        transport.append(self._mini_play_btn)
+
+        mini_next_btn = Gtk.Button()
+        mini_next_btn.set_icon_name('m3-skip-next-symbolic')
+        mini_next_btn.add_css_class('circular')
+        mini_next_btn.connect('clicked', self._on_next_track)
+        transport.append(mini_next_btn)
+
+        content.append(transport)
+
+        overlay.add_overlay(content)
+        return overlay
+
+    def _on_toggle_mini_clicked(self, _btn):
+        self._set_mini_mode(not self._mini_mode)
+
+    def _set_mini_mode(self, enabled: bool):
+        if enabled == self._mini_mode:
+            return
+        self._mini_mode = enabled
+
+        if enabled:
+            self._normal_win_size = (self.get_width(), self.get_height())
+            self._mode_stack.set_visible_child_name('mini')
+            self._header_search.set_visible(False)
+            if self._sidebar_btn:
+                self._sidebar_btn.set_visible(False)
+            self._mini_btn.set_icon_name('m3-open-in-full-symbolic')
+            self._mini_btn.set_tooltip_text('Volver al modo completo')
+            self._refresh_cover_backgrounds()
+            # El mínimo normal (480x500) impediría encoger la ventana por
+            # debajo de eso, así que hay que bajarlo también al tamaño mini.
+            self.set_size_request(*_MINI_WINDOW_SIZE)
+            self.set_default_size(*_MINI_WINDOW_SIZE)
+            self.set_resizable(False)
+        else:
+            self.set_resizable(True)
+            self.set_size_request(*_NORMAL_MIN_SIZE)
+            self._mode_stack.set_visible_child_name('normal')
+            self._header_search.set_visible(True)
+            if self._sidebar_btn:
+                self._sidebar_btn.set_visible(True)
+            self._mini_btn.set_icon_name('m3-picture-in-picture-symbolic')
+            self._mini_btn.set_tooltip_text('Modo mini')
+            if self._normal_win_size:
+                self.set_default_size(*self._normal_win_size)
 
     def _build_controls(self) -> Gtk.Widget:
         bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -2707,7 +3036,8 @@ class RadioWindow(Adw.ApplicationWindow):
         self._vol_scale.set_value(self._player.get_volume())
         self._vol_scale.set_size_request(100, -1)
         self._vol_scale.set_draw_value(False)
-        self._vol_scale.add_css_class('m3-wavy')
+        # Pista recta y fina M3 (no "wavy" como la barra de progreso).
+        self._vol_scale.add_css_class('m3-linear')
         self._vol_scale.connect('value-changed', self._on_volume_changed)
         bar.append(self._vol_scale)
 
@@ -3050,10 +3380,8 @@ class RadioWindow(Adw.ApplicationWindow):
         if row.logo_bytes:
             self._set_cover_from_bytes(row.logo_bytes)
         else:
-            self._cover_image.set_from_icon_name('m3-radio-symbolic')
-            self._cover_image.set_pixel_size(160)
             self._current_cover_data = None
-            self._update_cover_display_mode()
+            self._apply_cover_pixbuf(None, 'm3-radio-symbolic')
             favicon = row.station.get('favicon', '')
             if favicon and favicon.startswith('http'):
                 radio_browser.fetch_image(
@@ -3076,12 +3404,7 @@ class RadioWindow(Adw.ApplicationWindow):
         cover = row.tags.get('cover_data')
         self._current_cover_data = cover
         pb = _pixbuf_from_bytes(cover, 160) if cover else None
-        if pb:
-            self._cover_image.set_from_pixbuf(pb)
-        else:
-            self._cover_image.set_from_icon_name('m3-music-note-symbolic')
-            self._cover_image.set_pixel_size(160)
-        self._update_cover_display_mode()
+        self._apply_cover_pixbuf(pb, 'm3-music-note-symbolic')
 
         uri = 'file://' + urllib.parse.quote(row.path)
         self._player.play(uri)
@@ -3122,13 +3445,20 @@ class RadioWindow(Adw.ApplicationWindow):
     @staticmethod
     def _next_visible_row(listbox: Gtk.ListBox, current: int,
                           delta: int) -> Gtk.ListBoxRow | None:
+        # Solo get_visible() (filtrado por búsqueda / cabecera de género
+        # colapsada) — get_mapped() exigiría además que la página que
+        # contiene la lista esté físicamente en pantalla, lo que falla en
+        # el modo mini (esa página queda oculta/desmapeada) y rompía
+        # anterior/siguiente ahí. Se excluyen las GenreHeaderRow: no son
+        # pistas reproducibles, y _on_station_activated las ignora en
+        # silencio, dejando la navegación "atascada" si se aterriza en una.
         visible = []
         i = 0
         while True:
             row = listbox.get_row_at_index(i)
             if row is None:
                 break
-            if row.get_visible() and row.get_mapped():
+            if row.get_visible() and not isinstance(row, GenreHeaderRow):
                 visible.append((i, row))
             i += 1
         if not visible:
@@ -3145,9 +3475,12 @@ class RadioWindow(Adw.ApplicationWindow):
         self._seek_bar.set_value(0)
         self._pos_label.set_text('0:00')
         self._spectrum_viz.reset()
+        self._mini_spectrum_viz.reset()
+        self._cover_halo.reset()
         self._play_btn.set_icon_name('m3-play-arrow-symbolic')
+        self._mini_play_btn.set_icon_name('m3-play-arrow-symbolic')
         self._current_cover_data = None
-        self._update_cover_display_mode()
+        self._refresh_cover_backgrounds()
 
     def _on_volume_changed(self, scale):
         value = scale.get_value()
@@ -3185,11 +3518,14 @@ class RadioWindow(Adw.ApplicationWindow):
     def _on_metadata(self, _player, title, artist, album):
         if title:
             self._title_label.set_text(title)
+            self._mini_title_label.set_text(title)
             if self._is_radio and title != self._last_notified_title:
                 self._last_notified_title = title
                 if self._desktop_notifications:
                     self._notify_now_playing(title, artist or '')
-        if artist: self._artist_label.set_text(artist)
+        if artist:
+            self._artist_label.set_text(artist)
+            self._mini_artist_label.set_text(artist)
         if album:  self._album_label.set_text(album)
 
     def _on_cover_data(self, _player, data):
@@ -3197,10 +3533,13 @@ class RadioWindow(Adw.ApplicationWindow):
         pb = _pixbuf_from_bytes(data, 160)
         if pb:
             self._cover_image.set_from_pixbuf(pb)
-        self._update_cover_display_mode()
+            self._mini_cover_image.set_from_pixbuf(pb)
+        self._refresh_cover_backgrounds()
 
     def _on_spectrum(self, _player, magnitudes):
         self._spectrum_viz.push(magnitudes)
+        self._mini_spectrum_viz.push(magnitudes)
+        self._cover_halo.push(magnitudes)
 
     def _on_eos(self, _player):
         if self._current_episode is not None:
@@ -3228,7 +3567,7 @@ class RadioWindow(Adw.ApplicationWindow):
             row = self._mp3_list.get_row_at_index(i)
             if row is None:
                 break
-            if row.get_visible() and row.get_mapped():
+            if row.get_visible():
                 visible.append((i, row))
             i += 1
         if not visible:
@@ -3247,13 +3586,14 @@ class RadioWindow(Adw.ApplicationWindow):
             row = listbox.get_row_at_index(i)
             if row is None:
                 return None
-            if row.get_visible() and row.get_mapped():
+            if row.get_visible() and not isinstance(row, GenreHeaderRow):
                 return row
             i += 1
 
     def _on_state_changed(self, _player, playing):
         icon = 'm3-pause-symbolic' if playing else 'm3-play-arrow-symbolic'
         self._play_btn.set_icon_name(icon)
+        self._mini_play_btn.set_icon_name(icon)
         if playing:
             if not self._is_radio:
                 self._start_position_timer()
@@ -3364,13 +3704,8 @@ class RadioWindow(Adw.ApplicationWindow):
 
     def _set_cover_from_bytes(self, data: bytes):
         pb = _pixbuf_from_bytes(data, 160)
-        if pb:
-            self._cover_image.set_from_pixbuf(pb)
-        else:
-            self._cover_image.set_from_icon_name('m3-radio-symbolic')
-            self._cover_image.set_pixel_size(160)
         self._current_cover_data = data
-        self._update_cover_display_mode()
+        self._apply_cover_pixbuf(pb, 'm3-radio-symbolic')
 
     def _on_station_logo(self, data: bytes, row: 'StationRow'):
         if data:

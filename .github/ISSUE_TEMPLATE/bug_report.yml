@@ -14,7 +14,7 @@ body:
     attributes:
       label: Versión de ÆRx Player
       description: La ves en "Acerca de", o con `dpkg -s aerx-player`
-      placeholder: "0.99-beta"
+      placeholder: "1.0"
     validations:
       required: true
 

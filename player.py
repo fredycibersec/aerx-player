@@ -24,10 +24,23 @@ class Player(GObject.Object):
     SPECTRUM_BANDS    = 40
     SPECTRUM_INTERVAL = 50_000_000   # 50 ms → 20 fps
 
+    # Retraso mínimo (ms) aplicado a cada frame del espectro antes de
+    # emitirlo. GST_QUERY_LATENCY (ver _refresh_output_latency) apenas
+    # aporta nada aquí: ese mecanismo está pensado para fuentes "live"
+    # (cámara/micrófono) y en un pipeline de solo audio no-live (como este,
+    # incluso con streams de radio por red) suele devolver 0, aunque el
+    # sink de audio (ALSA/Pulse/PipeWire) sí tenga su propio buffer de
+    # salida real. Este valor fijo es una estimación razonable de ese
+    # buffer + el jitter de red típico de un stream de radio; si el
+    # espectro se sigue viendo desincronizado, ajustar este número.
+    SPECTRUM_SYNC_FLOOR_MS = 150
+
     def __init__(self):
         super().__init__()
         self._playing = False
         self._volume = 0.8
+        self._output_latency_ns = 0
+        self._pending_spectrum_timers = set()
         self._pipeline = Gst.ElementFactory.make('playbin', 'player')
         if not self._pipeline:
             raise RuntimeError("GStreamer playbin unavailable – install gstreamer1.0-plugins-base")
@@ -63,10 +76,14 @@ class Player(GObject.Object):
         self._pipeline.set_property('uri', uri)
         self._pipeline.set_property('volume', self._volume)
         self._pipeline.set_state(Gst.State.PLAYING)
+        # Evita que un frame del espectro de la pista anterior, ya en
+        # camino, llegue tarde y se pinte encima de la nueva.
+        self._cancel_pending_spectrum()
 
     def stop(self):
         self._pipeline.set_state(Gst.State.NULL)
         self._playing = False   # sync update so toggle_pause() is correct immediately
+        self._cancel_pending_spectrum()
 
     def toggle_pause(self):
         if self._playing:
@@ -100,6 +117,7 @@ class Player(GObject.Object):
 
     def dispose(self):
         self._pipeline.set_state(Gst.State.NULL)
+        self._cancel_pending_spectrum()
 
     # ── GStreamer bus callbacks ────────────────────────────────────────────────
 
@@ -165,11 +183,57 @@ class Player(GObject.Object):
         if not m:
             return
         mags = [float(v) for v in self._NUM_RE.findall(m.group(1))]
-        if mags:
-            GLib.idle_add(self.emit, 'spectrum', mags)
+        if not mags:
+            return
+        delay_ms = max(self.SPECTRUM_SYNC_FLOOR_MS,
+                       min(500, self._output_latency_ns // 1_000_000))
+
+        # No se puede pasar el propio id de GLib.timeout_add() a su propio
+        # callback, así que se captura en un dict mutable para que el
+        # callback pueda quitarse solo de _pending_spectrum_timers al
+        # disparar (si no, la lista de pendientes crecería sin límite
+        # durante una reproducción larga).
+        holder = {}
+
+        def _fire():
+            self._pending_spectrum_timers.discard(holder.get('id'))
+            self.emit('spectrum', mags)
+            return GLib.SOURCE_REMOVE
+
+        holder['id'] = GLib.timeout_add(delay_ms, _fire)
+        self._pending_spectrum_timers.add(holder['id'])
+
+    def _cancel_pending_spectrum(self):
+        """Cancela los frames del espectro ya programados pero aún sin
+        emitir — necesario al parar/cambiar de pista (para que no lleguen
+        tarde y pinten datos obsoletos encima de la nueva reproducción) y
+        al cambiar el retraso a mitad de stream (para que no se desordenen
+        frames programados con retrasos distintos)."""
+        for source_id in self._pending_spectrum_timers:
+            GLib.source_remove(source_id)
+        self._pending_spectrum_timers.clear()
 
     def _on_state_changed(self, _bus, message):
         if message.src is self._pipeline:
             _old, new, _pending = message.parse_state_changed()
             self._playing = new == Gst.State.PLAYING
+            if self._playing:
+                self._refresh_output_latency()
             GLib.idle_add(self.emit, 'state-changed', self._playing)
+
+    def _refresh_output_latency(self):
+        """El elemento `spectrum` analiza el audio justo tras decodificar,
+        antes del buffer del sink (ALSA/Pulse/PipeWire) — sin compensar
+        esto, el espectrograma se "adelanta" a lo que realmente se oye.
+        Se consulta la latencia real del pipeline (estándar de GStreamer
+        para estos casos) y se usa para retrasar la emisión de cada frame."""
+        query = Gst.Query.new_latency()
+        if self._pipeline.query(query):
+            _live, min_latency, _max_latency = query.parse_latency()
+            if (min_latency and min_latency != Gst.CLOCK_TIME_NONE
+                    and min_latency != self._output_latency_ns):
+                self._output_latency_ns = min_latency
+                # Si hay frames ya programados con el retraso anterior,
+                # cancelarlos evita que lleguen desordenados respecto a los
+                # que se programen a partir de ahora con el retraso nuevo.
+                self._cancel_pending_spectrum()

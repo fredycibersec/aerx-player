@@ -26,11 +26,6 @@
 
 ---
 
-> [!IMPORTANT]
-> **ÆRx Player está en fase 0.99-beta3**, la última beta antes del lanzamiento estable de la **1.0**. Es funcional y estable en el día a día, pero puede haber cambios de última hora en la interfaz o en el formato de configuración antes de la versión final. ¡Los reportes de fallos son muy bienvenidos!
-
----
-
 ## Características
 
 - **Podcasts** — búsqueda vía iTunes Search API, suscripción por feed RSS y descarga de episodios.
@@ -41,9 +36,10 @@
 - **Búsqueda automática de carátula e info** vía MusicBrainz + Cover Art Archive, con iTunes Search API como respaldo.
 - **Interfaz Material Design 3** — paleta de color por tonos (claro/oscuro reactivo), indicadores de progreso "wavy" e iconografía Material Symbols.
 - **22 esquemas de color** — Dracula, Nord, Catppuccin, Gruvbox, Solarized, Monokai, Ayu, Tokyo Night, Kanagawa, Rosé Pine y más, seleccionables desde Ajustes.
+- **Modo mini-reproductor** — vista compacta con carátula, fondo desenfocado/sólido, título y transporte, redimensionando la ventana; ideal para dejarlo de fondo mientras trabajas.
 - **Fondo de carátula a pantalla completa** con difuminado y oscurecido al ocultar el panel lateral, si la carátula tiene buena resolución.
 - **Comprobación de actualizaciones** desde "Acerca de", con enlace directo de descarga del `.deb` cuando hay una versión más reciente en GitHub.
-- **Visualizador de espectro multi-modo** — 6 estilos: Gauss, barras agrupadas, osciloscopio, barras clásicas, radial, espejo.
+- **Visualizador de espectro multi-modo** — 9 estilos: Gauss, barras agrupadas, osciloscopio (por defecto), barras clásicas, espectrograma, radial, espejo, vúmetro y partículas. Además, un anillo ambiental monocromo siempre visible alrededor de la carátula.
 - **Secciones colapsables por género** con sección de Favoritas.
 - **Añadir emisoras manualmente** por URL; exportar/importar favoritos en JSON.
 - **Ordenar lista MP3** por nombre, título, artista o álbum.
@@ -62,7 +58,7 @@
 Descarga el último `.deb` desde la sección [Releases](../../releases/latest) e instálalo con:
 
 ```bash
-sudo apt install ./aerx-player_0.99-beta3_all.deb
+sudo apt install ./aerx-player_1.0_all.deb
 ```
 
 Esto instala todas las dependencias automáticamente. Después busca **ÆRx Player** en el lanzador de aplicaciones o ejecuta `aerx` en la terminal.
@@ -161,6 +157,7 @@ aerx-player/
 
 | Versión     | Cambios destacados |
 |-------------|-------------------|
+| 1.0         | **Primera versión estable.** Modo mini-reproductor (carátula, fondo desenfocado/sólido, transporte, ventana redimensionada). Espectrograma frecuencia/tiempo y anillo ambiental monocromo alrededor de la carátula, nuevos en el visualizador. Osciloscopio como visualización por defecto. Slider de volumen rediseñado (línea recta, mismo grosor que el indicador de progreso). Corrige el desfase del espectrograma respecto al audio, la carátula del mini-reproductor para emisoras de radio, y anterior/siguiente en modo mini. |
 | 0.99-beta3  | **Esquemas de color** — nuevo selector en Ajustes con 22 paletas completas de temas de editor/terminal conocidos (Dracula, Nord, Catppuccin, Gruvbox, Solarized, Monokai, Ayu, Tokyo Night, Kanagawa, Rosé Pine y más), además del ÆRx por defecto. Hedge de compatibilidad CSS para libadwaita 1.6+/GTK 4.16+ (custom properties `var(--nombre)` junto a `@define-color`), pendiente de confirmar en Ubuntu 26.04. |
 | 0.99-beta2  | Corrige el `.deb`: faltaban `hero-banner.png` y `icons/aerx-mark.svg` en el paquete, por lo que el banner y el logo no se veían tras instalar en otra máquina. |
 | 0.99-beta   | **Relanzamiento como ÆRx Player** (antes RadioES): nueva identidad de marca e iconografía, soporte de **podcasts** (búsqueda, suscripción y descarga de episodios), y últimos ajustes de estilo Material Design 3 en los controles de reproducción. Última beta antes de la **1.0**. |
