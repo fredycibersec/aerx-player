@@ -158,7 +158,7 @@ aerx-player/
 | Versión     | Cambios destacados |
 |-------------|-------------------|
 | 1.0         | **Primera versión estable.** Modo mini-reproductor (carátula, fondo desenfocado/sólido, transporte, ventana redimensionada). Espectrograma frecuencia/tiempo y anillo ambiental monocromo alrededor de la carátula, nuevos en el visualizador. Osciloscopio como visualización por defecto. Slider de volumen rediseñado (línea recta, mismo grosor que el indicador de progreso). Corrige el desfase del espectrograma respecto al audio, la carátula del mini-reproductor para emisoras de radio, y anterior/siguiente en modo mini. |
-| 0.99-beta3  | **Esquemas de color** — nuevo selector en Ajustes con 22 paletas completas de temas de editor/terminal conocidos (Dracula, Nord, Catppuccin, Gruvbox, Solarized, Monokai, Ayu, Tokyo Night, Kanagawa, Rosé Pine y más), además del ÆRx por defecto. Hedge de compatibilidad CSS para libadwaita 1.6+/GTK 4.16+ (custom properties `var(--nombre)` junto a `@define-color`), pendiente de confirmar en Ubuntu 26.04. |
+| 0.99-beta3  | **Esquemas de color** — nuevo selector en Ajustes con 22 paletas completas de temas de editor/terminal conocidos (Dracula, Nord, Catppuccin, Gruvbox, Solarized, Monokai, Ayu, Tokyo Night, Kanagawa, Rosé Pine y más), además del ÆRx por defecto. Hedge de compatibilidad CSS para libadwaita 1.6+/GTK 4.16+ (custom properties `var(--nombre)` junto a `@define-color`), confirmado en Ubuntu 26.04.1. |
 | 0.99-beta2  | Corrige el `.deb`: faltaban `hero-banner.png` y `icons/aerx-mark.svg` en el paquete, por lo que el banner y el logo no se veían tras instalar en otra máquina. |
 | 0.99-beta   | **Relanzamiento como ÆRx Player** (antes RadioES): nueva identidad de marca e iconografía, soporte de **podcasts** (búsqueda, suscripción y descarga de episodios), y últimos ajustes de estilo Material Design 3 en los controles de reproducción. Última beta antes de la **1.0**. |
 
@@ -168,6 +168,7 @@ aerx-player/
 
 | Distribución             | Estado     |
 |--------------------------|-----------|
+| Ubuntu 26.04.1 LTS       | ✅ Probado |
 | Ubuntu 24.04 LTS         | ✅ Probado |
 | Ubuntu 22.04 LTS         | ✅ Probado |
 | Linux Mint 21+           | ✅ Probado |
