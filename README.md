@@ -52,22 +52,22 @@
 ## Interfaz
 
 <p align="center">
-  <img alt="Pantalla de inicio" src="assets/screenshots/inicio.png" width="720">
+  <img alt="Pantalla de inicio" src="assets/screenshots/inicio.png" width="791">
   <br><sub>Inicio — emisoras destacadas</sub>
 </p>
 
 <p align="center">
-  <img alt="Reproduciendo radio" src="assets/screenshots/radio.png" width="720">
+  <img alt="Reproduciendo radio" src="assets/screenshots/radio.png" width="791">
   <br><sub>Radio en directo — visualizador y anillo ambiental</sub>
 </p>
 
 <p align="center">
-  <img alt="Reproduciendo música local" src="assets/screenshots/musica-local.png" width="720">
+  <img alt="Reproduciendo música local" src="assets/screenshots/musica-local.png" width="791">
   <br><sub>Música local — fondo de carátula a pantalla completa</sub>
 </p>
 
 <p align="center">
-  <img alt="Modo mini-reproductor" src="assets/screenshots/mini.png" width="300">
+  <img alt="Modo mini-reproductor" src="assets/screenshots/mini.png" width="396">
   <br><sub>Modo mini-reproductor</sub>
 </p>
 
