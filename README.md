@@ -18,8 +18,6 @@
 
 <p align="center"><strong>Radio y Audio, sin fronteras.</strong></p>
 
-<!-- TODO: capturas pendientes del rediseño ÆRx Player -->
-
 **ÆRx Player** es una aplicación de escritorio para **distribuciones basadas en Debian/Ubuntu** (Ubuntu 22.04+, Linux Mint 21+, Debian 12+) que permite escuchar emisoras de radio españolas en directo, seguir podcasts y reproducir archivos de audio locales, con una interfaz Material Design 3 integrada en el escritorio GNOME/Adwaita.
 
 > Anteriormente publicada como **RadioES**, el proyecto se relanza bajo la marca **ÆRx Player** junto con un rediseño Material Design 3 y soporte de podcasts.
@@ -51,12 +49,29 @@
 
 ---
 
-## Interfaz (Screenshots)
-<img width="600" alt="image" src="https://github.com/user-attachments/assets/2c23f418-3ed8-444f-896a-b5431e21c814" />
-<img width="301" alt="image" src="https://github.com/user-attachments/assets/65feeb4d-e21c-432c-a550-2f58aba70ff1" />
-<img width="600" alt="image" src="https://github.com/user-attachments/assets/7f3a701f-751c-4be9-8104-89b5844849b6" />
-<img width="600" alt="image" src="https://github.com/user-attachments/assets/e017a226-b12f-4d0c-afac-9c1cd35f0e47" />
+## Interfaz
 
+<p align="center">
+  <img alt="Pantalla de inicio" src="assets/screenshots/inicio.png" width="720">
+  <br><sub>Inicio — emisoras destacadas</sub>
+</p>
+
+<p align="center">
+  <img alt="Reproduciendo radio" src="assets/screenshots/radio.png" width="720">
+  <br><sub>Radio en directo — visualizador y anillo ambiental</sub>
+</p>
+
+<p align="center">
+  <img alt="Reproduciendo música local" src="assets/screenshots/musica-local.png" width="720">
+  <br><sub>Música local — fondo de carátula a pantalla completa</sub>
+</p>
+
+<p align="center">
+  <img alt="Modo mini-reproductor" src="assets/screenshots/mini.png" width="301">
+  <br><sub>Modo mini-reproductor</sub>
+</p>
+
+---
 
 ## Instalación (Debian/Ubuntu)
 
