@@ -67,7 +67,7 @@
 </p>
 
 <p align="center">
-  <img alt="Modo mini-reproductor" src="assets/screenshots/mini.png" width="301">
+  <img alt="Modo mini-reproductor" src="assets/screenshots/mini.png" width="300">
   <br><sub>Modo mini-reproductor</sub>
 </p>
 
@@ -179,6 +179,7 @@ aerx-player/
 
 | Versión     | Cambios destacados |
 |-------------|-------------------|
+| 1.01        | Cambios menores. El audio se identifica ante PipeWire/PulseAudio como **ÆRx Player** (antes "python3"), con volumen y silencio propios en el mezclador del sistema en vez de compartirlos con otros programas Python. Capturas de pantalla del README recortadas al borde de la ventana. |
 | 1.0         | **Primera versión estable.** Modo mini-reproductor (carátula, fondo desenfocado/sólido, transporte, ventana redimensionada). Espectrograma frecuencia/tiempo y anillo ambiental monocromo alrededor de la carátula, nuevos en el visualizador. Osciloscopio como visualización por defecto. Slider de volumen rediseñado (línea recta, mismo grosor que el indicador de progreso). Corrige el desfase del espectrograma respecto al audio, la carátula del mini-reproductor para emisoras de radio, y anterior/siguiente en modo mini. |
 | 0.99-beta3  | **Esquemas de color** — nuevo selector en Ajustes con 22 paletas completas de temas de editor/terminal conocidos (Dracula, Nord, Catppuccin, Gruvbox, Solarized, Monokai, Ayu, Tokyo Night, Kanagawa, Rosé Pine y más), además del ÆRx por defecto. Hedge de compatibilidad CSS para libadwaita 1.6+/GTK 4.16+ (custom properties `var(--nombre)` junto a `@define-color`), confirmado en Ubuntu 26.04.1. |
 | 0.99-beta2  | Corrige el `.deb`: faltaban `hero-banner.png` y `icons/aerx-mark.svg` en el paquete, por lo que el banner y el logo no se veían tras instalar en otra máquina. |

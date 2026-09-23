@@ -26,6 +26,13 @@ from gi.repository import (
     Gio, GdkPixbuf, Gdk, Pango,
 )
 
+# Nombre propio ante PipeWire/PulseAudio: sin esto el stream aparece como
+# "python3" y WirePlumber comparte el volumen/silencio guardado con
+# cualquier otro script de Python que reproduzca audio.
+GLib.set_application_name('ÆRx Player')
+os.environ.setdefault(
+    'PULSE_PROP', "application.name='ÆRx Player' application.icon_name=aerx-player")
+
 from player import Player
 import radio_browser
 import cover_lookup
@@ -35,7 +42,7 @@ import metadata as meta_mod
 
 Gst.init(None)
 
-APP_VERSION = '1.0'
+APP_VERSION = '1.01'
 KOFI_URL    = 'https://ko-fi.com/saruman_dev'
 
 DATA_DIR      = Path(__file__).parent / 'data'
