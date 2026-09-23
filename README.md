@@ -51,6 +51,13 @@
 
 ---
 
+## Interfaz (Screenshots)
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/2c23f418-3ed8-444f-896a-b5431e21c814" />
+<img width="301" alt="image" src="https://github.com/user-attachments/assets/65feeb4d-e21c-432c-a550-2f58aba70ff1" />
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/7f3a701f-751c-4be9-8104-89b5844849b6" />
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/e017a226-b12f-4d0c-afac-9c1cd35f0e47" />
+
+
 ## Instalación (Debian/Ubuntu)
 
 ### Opción 1 — Paquete `.deb` (recomendado)
